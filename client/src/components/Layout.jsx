@@ -232,14 +232,18 @@ export default function Layout() {
             style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:200 }}
           />
 
-          {/* Sheet */}
+          {/* Sheet — outer div centres within the viewport, inner div animates */}
+          <div style={{
+            position:'fixed', bottom:0, left:0, right:0, zIndex:201,
+            display:'flex', justifyContent:'center', alignItems:'flex-end',
+            pointerEvents:'none',
+          }}>
           <div
             className="slide-up"
             style={{
-              position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)',
-              width:'100%', maxWidth:480,
+              width:'100%', maxWidth:480, pointerEvents:'all',
               background:'var(--white)', borderRadius:'20px 20px 0 0',
-              zIndex:201, overflow:'hidden',
+              overflow:'hidden',
               paddingBottom:`calc(20px + var(--safe-bottom))`,
               boxShadow:'0 -8px 40px rgba(0,0,0,0.18)',
             }}
@@ -306,6 +310,7 @@ export default function Layout() {
               ))}
             </div>
           </div>
+          </div>{/* end centering wrapper */}
         </>
       )}
     </div>
