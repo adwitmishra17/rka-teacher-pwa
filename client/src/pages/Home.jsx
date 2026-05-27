@@ -110,7 +110,7 @@ export default function Home() {
         </div>
       </Link>
 
-      {/* Quick action cards — 2×2 grid */}
+      {/* Teaching actions — 2×2 grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
         <Link to="/log-lesson" style={{ textDecoration: 'none' }}>
           <div className="fade-up" style={{ background: 'var(--green)', borderRadius: 'var(--radius-lg)', padding: '20px 16px', color: 'white', position: 'relative', overflow: 'hidden', minHeight: 100 }}>
@@ -126,14 +126,6 @@ export default function Home() {
             <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>Weekly<br />Lesson Plan</div>
           </div>
         </Link>
-        {/* Exam marks — now Supabase-backed via /exam-marks */}
-        <Link to="/exam-marks" style={{ textDecoration: 'none' }}>
-          <div className="fade-up" style={{ background: 'var(--gold)', borderRadius: 'var(--radius-lg)', padding: '20px 16px', color: 'var(--green-dark)', position: 'relative', overflow: 'hidden', minHeight: 100 }}>
-            <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.15)' }} />
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green-dark)" strokeWidth="1.8" style={{ marginBottom: 12, opacity: 0.8 }}><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
-            <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, color: 'var(--green-dark)' }}>Enter Exam<br />Marks</div>
-          </div>
-        </Link>
         <Link to="/student-analytics" style={{ textDecoration: 'none' }}>
           <div className="fade-up" style={{ background: '#e6f1fb', borderRadius: 'var(--radius-lg)', padding: '20px 16px', position: 'relative', overflow: 'hidden', minHeight: 100 }}>
             <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'rgba(24,95,165,0.08)' }} />
@@ -141,9 +133,55 @@ export default function Home() {
             <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, color: '#185fa5' }}>Student<br />Analytics</div>
           </div>
         </Link>
+        <Link to="/my-marks" style={{ textDecoration: 'none' }}>
+          <div className="fade-up" style={{ background: '#f0f7f0', border: '1px solid var(--green-muted)', borderRadius: 'var(--radius-lg)', padding: '20px 16px', position: 'relative', overflow: 'hidden', minHeight: 100 }}>
+            <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'rgba(26,74,46,0.06)' }} />
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="1.8" style={{ marginBottom: 12 }}><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
+            <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, color: 'var(--green-dark)' }}>My Marks<br />Reports</div>
+          </div>
+        </Link>
       </div>
 
-      {/* Co-scholastic grades + HPC — second row */}
+      {/* Marks entry — section header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Marks Entry</span>
+        <div style={{ flex: 1, height: 1, background: 'var(--gray-100)' }} />
+      </div>
+
+      {/* Two marks flows — stacked with clear labels */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+        {/* Test marks — Firestore, admin-scheduled */}
+        <Link to="/test-marks" style={{ textDecoration: 'none' }}>
+          <div className="fade-up" style={{ background: 'var(--green)', borderRadius: 'var(--radius-lg)', padding: '16px 18px', color: 'white', display: 'flex', alignItems: 'center', gap: 14, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.07)' }} />
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>Enter Test Marks</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>Admin-scheduled class tests</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
+          </div>
+        </Link>
+
+        {/* Exam marks — Supabase, for report cards */}
+        <Link to="/exam-marks" style={{ textDecoration: 'none' }}>
+          <div className="fade-up" style={{ background: 'var(--gold)', borderRadius: 'var(--radius-lg)', padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.12)' }} />
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(26,74,46,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green-dark)" strokeWidth="1.8"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, color: 'var(--green-dark)' }}>Enter Exam Marks</div>
+              <div style={{ fontSize: 11, color: 'rgba(26,74,46,0.65)', marginTop: 2 }}>Term exams · used for report cards</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green-dark)" strokeWidth="2" style={{ opacity: 0.5 }}><polyline points="9 18 15 12 9 6" /></svg>
+          </div>
+        </Link>
+      </div>
+
+      {/* Co-scholastic grades + HPC */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
         <Link to="/exam-grades" style={{ textDecoration: 'none' }}>
           <div className="fade-up" style={{ background: '#f0f7f0', border: '1px solid var(--green-muted)', borderRadius: 'var(--radius-lg)', padding: '20px 16px', position: 'relative', overflow: 'hidden', minHeight: 100 }}>

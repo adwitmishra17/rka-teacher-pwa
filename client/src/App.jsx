@@ -15,6 +15,7 @@ import MyAttendance from './pages/MyAttendance'
 import MyDocuments from './pages/MyDocuments'
 import MyStudents from './pages/MyStudents'
 import StudentAttendance from './pages/StudentAttendance'
+import EnterMarks from './pages/EnterMarks'
 import ExamMarksEntry from './pages/ExamMarksEntry'
 import ExamGradesEntry from './pages/ExamGradesEntry'
 import HpcEntry from './pages/HpcEntry'
@@ -102,12 +103,14 @@ export default function App() {
             <Route path="hrms/documents" element={<MyDocuments />} />
             <Route path="my-students" element={<MyStudents />} />
             <Route path="student-attendance" element={<StudentAttendance />} />
-            {/* Supabase-backed exam data entry */}
+            {/* Firestore-backed internal test marks */}
+            <Route path="test-marks" element={<EnterMarks />} />
+            {/* Supabase-backed term exam data entry */}
             <Route path="exam-marks" element={<ExamMarksEntry />} />
             <Route path="exam-grades" element={<ExamGradesEntry />} />
             <Route path="hpc-entry" element={<HpcEntry />} />
-            {/* Legacy redirect — bookmarks / installed PWA tiles that still point here */}
-            <Route path="enter-marks" element={<Navigate to="/exam-marks" replace />} />
+            {/* Legacy redirect — installed PWA tiles that still point to old /enter-marks */}
+            <Route path="enter-marks" element={<Navigate to="/test-marks" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>
