@@ -33,14 +33,29 @@ app.use('/api', hpcRouter)
 // Health check (Hostinger / load balancer ping)
 app.get('/health', (_req, res) => res.json({ ok: true }))
 
-// Serve the React build whenever dist/ exists (i.e. on Hostinger after npm run build).
-// Guards against startup crash in local dev where dist/ hasn't been built yet.
+// Serve the React build. express.static is safe even if the folder doesn't
+// exist yet — it just passes through. The catch-all checks for index.html
+// explicitly so a missing build gives a clear error instead of "Cannot GET /".
 const clientDist = join(__dirname, 'client', 'dist')
-if (existsSync(clientDist)) {
-  app.use(express.static(clientDist))
-  // SPA fallback — let React Router handle all non-API paths
-  app.get('*', (_req, res) => res.sendFile(join(clientDist, 'index.html')))
-}
+const indexHtml  = join(clientDist, 'index.html')
+
+console.log('[server] __dirname  :', __dirname)
+console.log('[server] clientDist :', clientDist)
+console.log('[server] dist exists:', existsSync(clientDist))
+console.log('[server] index.html :', existsSync(indexHtml))
+
+app.use(express.static(clientDist))
+app.get('*', (_req, res) => {
+  if (existsSync(indexHtml)) {
+    res.sendFile(indexHtml)
+  } else {
+    res.status(503).send(
+      `<pre>React build not found.\n` +
+      `Expected: ${indexHtml}\n\n` +
+      `Run on the server:\n  npm install\n  npm run build\n</pre>`
+    )
+  }
+})
 
 app.listen(PORT, () => {
   console.log(`RKA Teacher API on port ${PORT} [${process.env.NODE_ENV || 'development'}]`)
