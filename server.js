@@ -3,6 +3,7 @@ import express from 'express'
 import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { existsSync } from 'fs'
 import subjectsRouter from './routes/subjects.js'
 import studentsRouter from './routes/students.js'
 import papersRouter from './routes/papers.js'
@@ -32,10 +33,12 @@ app.use('/api', hpcRouter)
 // Health check (Hostinger / load balancer ping)
 app.get('/health', (_req, res) => res.json({ ok: true }))
 
-// Serve React build in production
-if (process.env.NODE_ENV === 'production') {
-  const clientDist = join(__dirname, 'client', 'dist')
+// Serve the React build whenever dist/ exists (i.e. on Hostinger after npm run build).
+// Guards against startup crash in local dev where dist/ hasn't been built yet.
+const clientDist = join(__dirname, 'client', 'dist')
+if (existsSync(clientDist)) {
   app.use(express.static(clientDist))
+  // SPA fallback — let React Router handle all non-API paths
   app.get('*', (_req, res) => res.sendFile(join(clientDist, 'index.html')))
 }
 
