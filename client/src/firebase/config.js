@@ -3,12 +3,12 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBH6BsxePrtj40uXQHq8-uNW-USDadDXfs",
-  authDomain: "rka-academic-tracker.firebaseapp.com",
-  projectId: "rka-academic-tracker",
-  storageBucket: "rka-academic-tracker.firebasestorage.app",
-  messagingSenderId: "775717702646",
-  appId: "1:775717702646:web:db8ed71a1101f7b44e55d7"
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);

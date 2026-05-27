@@ -9,6 +9,9 @@ client/node_modules/
 .env
 .env.local
 .env.*.local
+client/.env
+client/.env.local
+client/.env.*.local
 
 # Logs
 *.log
