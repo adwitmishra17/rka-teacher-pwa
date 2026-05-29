@@ -52,8 +52,9 @@ app.use('/api', marksRouter)
 app.use('/api', gradesRouter)
 app.use('/api', hpcRouter)
 
-// Health check (Hostinger / load balancer ping)
-app.get('/health', (_req, res) => res.json({ ok: true }))
+// Health check (Hostinger / load balancer ping). `build` doubles as a deploy
+// marker so a new release can be confirmed live without an authenticated call.
+app.get('/health', (_req, res) => res.json({ ok: true, build: 'ws-fix' }))
 
 // Serve the React build. express.static is safe even if the folder doesn't
 // exist yet — it just passes through. The catch-all checks for index.html
