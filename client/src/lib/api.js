@@ -55,10 +55,12 @@ export const api = {
   getPapers: (subjectId, termId) =>
     apiFetch(`/paper?subjectId=${encodeURIComponent(subjectId)}&termId=${encodeURIComponent(termId)}`),
 
-  savePaper: ({ subjectId, termId, paperName, maxMarks, passingMarks, examDate, paperId }) =>
+  savePaper: ({ subjectId, termId, paperName, maxMarks, passingMarks, examDate, paperId,
+                hasPractical, theoryMax, practicalMax }) =>
     apiFetch('/paper', {
       method: 'POST',
-      body: JSON.stringify({ subjectId, termId, paperName, maxMarks, passingMarks, examDate, paperId }),
+      body: JSON.stringify({ subjectId, termId, paperName, maxMarks, passingMarks, examDate, paperId,
+                             hasPractical, theoryMax, practicalMax }),
     }),
 
   // --- Marks ---

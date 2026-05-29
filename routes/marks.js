@@ -8,7 +8,7 @@ const router = Router()
 async function assertPaperOwner(paperId, email) {
   const { data, error } = await supabase
     .from('exam_papers')
-    .select('id, max_marks, subject_id, exam_subjects(assigned_teacher_email)')
+    .select('id, max_marks, has_practical, theory_max, practical_max, subject_id, exam_subjects(assigned_teacher_email)')
     .eq('id', paperId)
     .single()
   if (error || !data) throw Object.assign(new Error('Paper not found'), { status: 404 })
@@ -33,7 +33,7 @@ router.get('/marks', requireAuth, async (req, res) => {
 
   const { data, error } = await supabase
     .from('exam_marks')
-    .select('marks_obtained, is_absent, remarks, students(admission_no)')
+    .select('marks_obtained, theory_obtained, practical_obtained, is_absent, remarks, students(admission_no)')
     .eq('paper_id', paperId)
 
   if (error) return res.status(500).json({ error: error.message })
@@ -42,6 +42,8 @@ router.get('/marks', requireAuth, async (req, res) => {
     marks: data.map(m => ({
       admissionNo: m.students?.admission_no,
       marksObtained: m.marks_obtained,
+      theoryObtained: m.theory_obtained,
+      practicalObtained: m.practical_obtained,
       isAbsent: m.is_absent,
       remarks: m.remarks,
     })),
@@ -96,6 +98,10 @@ router.post('/marks', requireAuth, async (req, res) => {
   const now = new Date().toISOString()
   const enteredBy = req.user.email ?? req.user.uid
   const maxMarks = Number(paper.max_marks ?? 0)
+  const hasPractical = Boolean(paper.has_practical)
+  const theoryMax    = Number(paper.theory_max ?? 0)
+  const practicalMax = Number(paper.practical_max ?? 0)
+  const clamp = (v, hi) => Math.min(Math.max(Number(v ?? 0), 0), hi || Infinity)
 
   let saved = 0, skipped = 0
   const errors = []
@@ -115,14 +121,26 @@ router.post('/marks', requireAuth, async (req, res) => {
       continue
     }
 
-    const marksObtained = m.isAbsent
-      ? 0
-      : Math.min(Math.max(Number(m.marksObtained ?? 0), 0), maxMarks || Infinity)
+    // Practical split: clamp each component to its own max; marks_obtained
+    // stays the TOTAL. Without a practical, behave exactly as before.
+    let marksObtained, theoryObtained, practicalObtained
+    if (m.isAbsent) {
+      marksObtained = 0; theoryObtained = null; practicalObtained = null
+    } else if (hasPractical) {
+      theoryObtained    = clamp(m.theoryObtained, theoryMax)
+      practicalObtained = clamp(m.practicalObtained, practicalMax)
+      marksObtained     = theoryObtained + practicalObtained
+    } else {
+      marksObtained = clamp(m.marksObtained, maxMarks)
+      theoryObtained = null; practicalObtained = null
+    }
 
     const payload = {
       paper_id: paperId,
       student_id: studentId,
       marks_obtained: marksObtained,
+      theory_obtained: theoryObtained,
+      practical_obtained: practicalObtained,
       is_absent: Boolean(m.isAbsent),
       remarks: m.remarks ?? null,
       source: 'teacher_pwa',

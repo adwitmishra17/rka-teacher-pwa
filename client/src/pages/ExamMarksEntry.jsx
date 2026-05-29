@@ -59,7 +59,7 @@ export default function ExamMarksEntry() {
   // Paper creation/edit form
   const [showPaperForm, setShowPaperForm] = useState(false)
   const [editingPaper, setEditingPaper] = useState(null)  // null = new
-  const [paperForm, setPaperForm] = useState({ paperName: '', maxMarks: '', passingMarks: '', examDate: '' })
+  const [paperForm, setPaperForm] = useState({ paperName: '', maxMarks: '', passingMarks: '', examDate: '', hasPractical: false, theoryMax: '', practicalMax: '' })
 
   // UI
   const [loading, setLoading] = useState(true)
@@ -107,6 +107,8 @@ export default function ExamMarksEntry() {
           name: s.full_name,
           rollNumber: s.roll_number,
           marks: '',
+          theoryMarks: '',
+          practicalMarks: '',
           isAbsent: false,
         })))
       })
@@ -122,9 +124,16 @@ export default function ExamMarksEntry() {
       .then(({ marks: existing }) => {
         if (!existing.length) return
         const byAdmission = new Map(existing.map(m => [m.admissionNo, m]))
+        const hp = !!selectedPaper.has_practical
         setStudents(prev => prev.map(s => {
           const m = byAdmission.get(s.admissionNo)
           if (!m) return s
+          if (hp) {
+            const t = m.isAbsent ? '' : (m.theoryObtained    != null ? String(m.theoryObtained)    : '')
+            const p = m.isAbsent ? '' : (m.practicalObtained != null ? String(m.practicalObtained) : '')
+            const tot = (t === '' && p === '') ? '' : String((Number(t || 0)) + (Number(p || 0)))
+            return { ...s, theoryMarks: t, practicalMarks: p, marks: tot, isAbsent: m.isAbsent ?? false }
+          }
           return {
             ...s,
             marks: m.isAbsent ? '' : (m.marksObtained != null ? String(m.marksObtained) : ''),
@@ -136,18 +145,37 @@ export default function ExamMarksEntry() {
   }, [selectedPaper])
 
   function updateMark(idx, field, value) {
+    // Clamp single-score entry to max_marks (non-practical papers).
     if (field === 'marks' && value !== '' && selectedPaper) {
       const max = Number(selectedPaper.max_marks ?? 0)
       const num = Number(value)
       if (isNaN(num)) return
       value = String(Math.min(Math.max(num, 0), max || Infinity))
     }
-    setStudents(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s))
+    // Clamp each component to its own cap (practical papers).
+    if ((field === 'theoryMarks' || field === 'practicalMarks') && value !== '' && selectedPaper) {
+      const cap = field === 'theoryMarks' ? Number(selectedPaper.theory_max ?? 0) : Number(selectedPaper.practical_max ?? 0)
+      const num = Number(value)
+      if (isNaN(num)) return
+      value = String(Math.min(Math.max(num, 0), cap || Infinity))
+    }
+    setStudents(prev => prev.map((s, i) => {
+      if (i !== idx) return s
+      const next = { ...s, [field]: value }
+      // Keep `marks` as the running TOTAL so all summary/review code is mode-agnostic.
+      if (field === 'theoryMarks' || field === 'practicalMarks') {
+        const t = next.theoryMarks === '' ? null : Number(next.theoryMarks)
+        const p = next.practicalMarks === '' ? null : Number(next.practicalMarks)
+        next.marks = (t == null && p == null) ? '' : String((t || 0) + (p || 0))
+      }
+      return next
+    }))
   }
 
   async function handleSavePaper() {
-    if (!paperForm.paperName.trim() || !paperForm.maxMarks) {
-      setError('Paper name and max marks are required')
+    const hp = paperForm.hasPractical
+    if (!paperForm.paperName.trim() || (hp ? (paperForm.theoryMax === '' || paperForm.practicalMax === '') : !paperForm.maxMarks)) {
+      setError(hp ? 'Paper name, theory max and practical max are required' : 'Paper name and max marks are required')
       return
     }
     setSaving(true)
@@ -157,10 +185,13 @@ export default function ExamMarksEntry() {
         subjectId: selectedSubject.id,
         termId: selectedTerm.id,
         paperName: paperForm.paperName.trim(),
-        maxMarks: Number(paperForm.maxMarks),
+        maxMarks: hp ? undefined : Number(paperForm.maxMarks),
         passingMarks: paperForm.passingMarks ? Number(paperForm.passingMarks) : null,
         examDate: paperForm.examDate || null,
         paperId: editingPaper?.id,
+        hasPractical: hp,
+        theoryMax: hp ? Number(paperForm.theoryMax) : undefined,
+        practicalMax: hp ? Number(paperForm.practicalMax) : undefined,
       })
       setPapers(prev => {
         const idx = prev.findIndex(p => p.id === paper.id)
@@ -169,7 +200,7 @@ export default function ExamMarksEntry() {
       setSelectedPaper(paper)
       setShowPaperForm(false)
       setEditingPaper(null)
-      setPaperForm({ paperName: '', maxMarks: '', passingMarks: '', examDate: '' })
+      setPaperForm({ paperName: '', maxMarks: '', passingMarks: '', examDate: '', hasPractical: false, theoryMax: '', practicalMax: '' })
     } catch (e) {
       setError(e.message)
     }
@@ -181,11 +212,19 @@ export default function ExamMarksEntry() {
     setSaving(true)
     setError('')
     try {
-      const payload = students.map(s => ({
-        admissionNo: s.admissionNo,
-        marksObtained: s.isAbsent ? 0 : Number(s.marks || 0),
-        isAbsent: s.isAbsent,
-      }))
+      const hp = !!selectedPaper.has_practical
+      const payload = students.map(s => hp
+        ? {
+            admissionNo: s.admissionNo,
+            theoryObtained: s.isAbsent ? 0 : Number(s.theoryMarks || 0),
+            practicalObtained: s.isAbsent ? 0 : Number(s.practicalMarks || 0),
+            isAbsent: s.isAbsent,
+          }
+        : {
+            admissionNo: s.admissionNo,
+            marksObtained: s.isAbsent ? 0 : Number(s.marks || 0),
+            isAbsent: s.isAbsent,
+          })
       const result = await api.saveMarks(selectedPaper.id, payload)
       setSaveResult(result)
       setSaved(true)
@@ -238,7 +277,7 @@ export default function ExamMarksEntry() {
             {saveResult?.errors?.length > 0 && (
               <p style={{ fontSize: 12, color: 'var(--crimson)', marginBottom: 4 }}>{saveResult.errors.length} error(s)</p>
             )}
-            <button onClick={() => { setSaved(false); setSelectedPaper(null); setPapers([]); setSelectedTerm(null); setStudents(prev => prev.map(s => ({ ...s, marks: '', isAbsent: false }))) }}
+            <button onClick={() => { setSaved(false); setSelectedPaper(null); setPapers([]); setSelectedTerm(null); setStudents(prev => prev.map(s => ({ ...s, marks: '', theoryMarks: '', practicalMarks: '', isAbsent: false }))) }}
               style={{ width: '100%', padding: '11px', background: 'var(--green)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 14 }}>
               OK
             </button>
@@ -281,7 +320,9 @@ export default function ExamMarksEntry() {
                       ) : (
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 600, color: passed === false ? 'var(--crimson)' : 'var(--green)' }}>{s.marks}<span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>/{selectedPaper?.max_marks}</span></div>
-                          {pct != null && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{pct}%</div>}
+                          {selectedPaper?.has_practical
+                            ? <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>T{s.theoryMarks || 0}+P{s.practicalMarks || 0}{pct != null ? ` · ${pct}%` : ''}</div>
+                            : (pct != null && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{pct}%</div>)}
                         </div>
                       )}
                     </div>
@@ -319,27 +360,74 @@ export default function ExamMarksEntry() {
               <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{selectedSubject?.subjectName} · {selectedTerm?.label ?? selectedTerm?.id}</p>
             </div>
             <div style={{ padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {[
-                { label: 'Paper name', key: 'paperName', placeholder: 'e.g. Unit Test 1', required: true },
-                { label: 'Max marks', key: 'maxMarks', placeholder: '100', type: 'number', required: true },
-                { label: 'Passing marks', key: 'passingMarks', placeholder: '33', type: 'number' },
-                { label: 'Exam date', key: 'examDate', type: 'date' },
-              ].map(({ label, key, placeholder, type = 'text', required }) => (
-                <div key={key}>
-                  <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>{label}{required && ' *'}</label>
-                  <input
-                    type={type}
-                    value={paperForm[key]}
-                    onChange={e => setPaperForm(f => ({ ...f, [key]: e.target.value }))}
-                    placeholder={placeholder}
-                    style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-sm)', fontSize: 14, boxSizing: 'border-box' }}
-                  />
-                </div>
-              ))}
-              <button onClick={handleSavePaper} disabled={saving || !paperForm.paperName.trim() || !paperForm.maxMarks}
-                style={{ width: '100%', padding: '13px', background: (!paperForm.paperName.trim() || !paperForm.maxMarks) ? 'var(--gray-200)' : 'var(--green)', color: (!paperForm.paperName.trim() || !paperForm.maxMarks) ? 'var(--gray-400)' : 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                {saving ? 'Saving…' : editingPaper ? 'Update paper' : 'Create paper'}
-              </button>
+              {(() => {
+                const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-sm)', fontSize: 14, boxSizing: 'border-box' }
+                const labelStyle = { fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }
+                const hp = paperForm.hasPractical
+                const total = hp ? (Number(paperForm.theoryMax || 0) + Number(paperForm.practicalMax || 0)) : null
+                const valid = paperForm.paperName.trim() && (hp ? (paperForm.theoryMax !== '' && paperForm.practicalMax !== '') : paperForm.maxMarks !== '')
+                return (
+                  <>
+                    <div>
+                      <label style={labelStyle}>Paper name *</label>
+                      <input type="text" value={paperForm.paperName} placeholder="e.g. Unit Test 1"
+                        onChange={e => setPaperForm(f => ({ ...f, paperName: e.target.value }))} style={inputStyle} />
+                    </div>
+
+                    {/* Practical toggle */}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', padding: '10px 12px', background: hp ? 'var(--green-light)' : 'var(--gray-50, #f7f7f5)', border: `1px solid ${hp ? 'var(--green-muted)' : 'var(--gray-200)'}`, borderRadius: 'var(--radius-sm)' }}>
+                      <input type="checkbox" checked={hp}
+                        onChange={e => setPaperForm(f => ({ ...f, hasPractical: e.target.checked }))}
+                        style={{ width: 16, height: 16, accentColor: 'var(--green)' }} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>This subject has a practical</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Enter theory and practical marks separately</div>
+                      </div>
+                    </label>
+
+                    {hp ? (
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={labelStyle}>Theory max *</label>
+                          <input type="number" min="0" value={paperForm.theoryMax} placeholder="80"
+                            onChange={e => setPaperForm(f => ({ ...f, theoryMax: e.target.value }))} style={inputStyle} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label style={labelStyle}>Practical max *</label>
+                          <input type="number" min="0" value={paperForm.practicalMax} placeholder="20"
+                            onChange={e => setPaperForm(f => ({ ...f, practicalMax: e.target.value }))} style={inputStyle} />
+                        </div>
+                        <div style={{ width: 64 }}>
+                          <label style={labelStyle}>Total</label>
+                          <div style={{ ...inputStyle, background: 'var(--gray-100)', textAlign: 'center', fontWeight: 700, color: 'var(--green-dark)' }}>{total || 0}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <label style={labelStyle}>Max marks *</label>
+                        <input type="number" min="0" value={paperForm.maxMarks} placeholder="100"
+                          onChange={e => setPaperForm(f => ({ ...f, maxMarks: e.target.value }))} style={inputStyle} />
+                      </div>
+                    )}
+
+                    <div>
+                      <label style={labelStyle}>Passing marks</label>
+                      <input type="number" min="0" value={paperForm.passingMarks} placeholder="33"
+                        onChange={e => setPaperForm(f => ({ ...f, passingMarks: e.target.value }))} style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Exam date</label>
+                      <input type="date" value={paperForm.examDate}
+                        onChange={e => setPaperForm(f => ({ ...f, examDate: e.target.value }))} style={inputStyle} />
+                    </div>
+
+                    <button onClick={handleSavePaper} disabled={saving || !valid}
+                      style={{ width: '100%', padding: '13px', background: !valid ? 'var(--gray-200)' : 'var(--green)', color: !valid ? 'var(--gray-400)' : 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 600, cursor: valid ? 'pointer' : 'not-allowed' }}>
+                      {saving ? 'Saving…' : editingPaper ? 'Update paper' : 'Create paper'}
+                    </button>
+                  </>
+                )
+              })()}
             </div>
           </div>
         </div>
@@ -403,18 +491,18 @@ export default function ExamMarksEntry() {
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 3 }}>{p.paper_name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    Max {p.max_marks}{p.passing_marks ? ` · Pass ${p.passing_marks}` : ''}{p.exam_date ? ` · ${p.exam_date}` : ''}
+                    Max {p.max_marks}{p.has_practical ? ` (T${p.theory_max ?? 0}+P${p.practical_max ?? 0})` : ''}{p.passing_marks ? ` · Pass ${p.passing_marks}` : ''}{p.exam_date ? ` · ${p.exam_date}` : ''}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                  <button onClick={e => { e.stopPropagation(); setEditingPaper(p); setPaperForm({ paperName: p.paper_name, maxMarks: String(p.max_marks), passingMarks: p.passing_marks ? String(p.passing_marks) : '', examDate: p.exam_date ?? '' }); setShowPaperForm(true) }}
+                  <button onClick={e => { e.stopPropagation(); setEditingPaper(p); setPaperForm({ paperName: p.paper_name, maxMarks: String(p.max_marks), passingMarks: p.passing_marks ? String(p.passing_marks) : '', examDate: p.exam_date ?? '', hasPractical: !!p.has_practical, theoryMax: p.theory_max != null ? String(p.theory_max) : '', practicalMax: p.practical_max != null ? String(p.practical_max) : '' }); setShowPaperForm(true) }}
                     style={{ background: 'var(--gray-100)', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 500 }}>Edit</button>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
                 </div>
               </button>
             ))}
           </div>
-          <button onClick={() => { setEditingPaper(null); setPaperForm({ paperName: '', maxMarks: '', passingMarks: '', examDate: '' }); setShowPaperForm(true) }}
+          <button onClick={() => { setEditingPaper(null); setPaperForm({ paperName: '', maxMarks: '', passingMarks: '', examDate: '', hasPractical: false, theoryMax: '', practicalMax: '' }); setShowPaperForm(true) }}
             style={{ width: '100%', padding: '13px', background: 'transparent', border: '1.5px dashed var(--green-muted)', borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 600, color: 'var(--green)', cursor: 'pointer' }}>
             + Add new paper
           </button>
@@ -434,7 +522,7 @@ export default function ExamMarksEntry() {
               <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 500 }}>{selectedSubject.subjectName}</span>
             </div>
             <div style={{ fontSize: 12, color: 'var(--green-mid)', marginTop: 2 }}>
-              {selectedSubject.className} · Max: {selectedPaper.max_marks}{selectedPaper.passing_marks ? ` · Pass: ${selectedPaper.passing_marks}` : ''}
+              {selectedSubject.className} · Max: {selectedPaper.max_marks}{selectedPaper.has_practical ? ` (Theory ${selectedPaper.theory_max ?? 0} + Practical ${selectedPaper.practical_max ?? 0})` : ''}{selectedPaper.passing_marks ? ` · Pass: ${selectedPaper.passing_marks}` : ''}
             </div>
           </div>
 
@@ -468,7 +556,30 @@ export default function ExamMarksEntry() {
                     <span style={{ fontSize: 11, color: s.isAbsent ? 'var(--crimson)' : 'var(--text-muted)', fontWeight: s.isAbsent ? 600 : 400 }}>Absent</span>
                   </label>
                 </div>
-                {!s.isAbsent && (
+                {!s.isAbsent && (selectedPaper.has_practical ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <input type="number" min="0" max={selectedPaper.theory_max} step="0.5" value={s.theoryMarks}
+                        onChange={e => updateMark(i, 'theoryMarks', e.target.value)}
+                        placeholder="Th"
+                        style={{ width: 56, padding: '7px 8px', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-sm)', fontSize: 14, textAlign: 'center' }} />
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>/{selectedPaper.theory_max}</span>
+                    </div>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>+</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <input type="number" min="0" max={selectedPaper.practical_max} step="0.5" value={s.practicalMarks}
+                        onChange={e => updateMark(i, 'practicalMarks', e.target.value)}
+                        placeholder="Pr"
+                        style={{ width: 56, padding: '7px 8px', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-sm)', fontSize: 14, textAlign: 'center' }} />
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>/{selectedPaper.practical_max}</span>
+                    </div>
+                    {s.marks !== '' && (
+                      <span style={{ fontSize: 12, fontWeight: 700, marginLeft: 'auto', color: selectedPaper.passing_marks && Number(s.marks) < Number(selectedPaper.passing_marks) ? 'var(--crimson)' : 'var(--green)' }}>
+                        = {s.marks}<span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>/{selectedPaper.max_marks}</span>
+                      </span>
+                    )}
+                  </div>
+                ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <input type="number" min="0" max={selectedPaper.max_marks} step="0.5" value={s.marks}
                       onChange={e => updateMark(i, 'marks', e.target.value)}
@@ -481,7 +592,7 @@ export default function ExamMarksEntry() {
                       </span>
                     )}
                   </div>
-                )}
+                ))}
               </div>
             ))}
           </div>

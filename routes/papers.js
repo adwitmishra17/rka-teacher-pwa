@@ -31,7 +31,7 @@ router.get('/paper', requireAuth, async (req, res) => {
 
     const { data: papers, error } = await supabase
       .from('exam_papers')
-      .select('id, paper_name, max_marks, passing_marks, exam_date, term_id')
+      .select('id, paper_name, max_marks, passing_marks, exam_date, term_id, has_practical, theory_max, practical_max')
       .eq('subject_id', subjectId)
       .eq('term_id', termId)
       .order('exam_date', { ascending: true, nullsFirst: false })
@@ -48,10 +48,30 @@ router.get('/paper', requireAuth, async (req, res) => {
 // Create a new paper, or update an existing one (pass paperId to update).
 // Teachers may create multiple papers per subject+term; admin marks the final one.
 router.post('/paper', requireAuth, async (req, res) => {
-  const { subjectId, termId, paperName, maxMarks, passingMarks, examDate, paperId } = req.body
+  const { subjectId, termId, paperName, maxMarks, passingMarks, examDate, paperId,
+          hasPractical, theoryMax, practicalMax } = req.body
 
-  if (!subjectId || !termId || !paperName || maxMarks == null) {
-    return res.status(400).json({ error: 'subjectId, termId, paperName, maxMarks are required' })
+  if (!subjectId || !termId || !paperName) {
+    return res.status(400).json({ error: 'subjectId, termId, paperName are required' })
+  }
+
+  // Max-marks split (migration 079). max_marks is always the TOTAL so existing
+  // report-card logic keeps working: with a practical it's theory_max +
+  // practical_max; without, it's the single maxMarks the teacher entered.
+  const practical = Boolean(hasPractical)
+  let max_marks, theory_max, practical_max
+  if (practical) {
+    theory_max    = Number(theoryMax)
+    practical_max = Number(practicalMax)
+    if (!(theory_max >= 0) || !(practical_max >= 0) || (theory_max + practical_max) <= 0) {
+      return res.status(400).json({ error: 'theoryMax and practicalMax must be non-negative and sum to > 0' })
+    }
+    max_marks = theory_max + practical_max
+  } else {
+    if (maxMarks == null) return res.status(400).json({ error: 'maxMarks is required' })
+    max_marks     = Number(maxMarks)
+    theory_max    = null
+    practical_max = 0
   }
 
   const email = (req.user.email || '').toLowerCase()
@@ -65,9 +85,12 @@ router.post('/paper', requireAuth, async (req, res) => {
     subject_id: subjectId,
     term_id: termId,
     paper_name: paperName,
-    max_marks: Number(maxMarks),
+    max_marks,
     passing_marks: passingMarks != null ? Number(passingMarks) : null,
     exam_date: examDate || null,
+    has_practical: practical,
+    theory_max,
+    practical_max,
   }
 
   if (paperId) {
