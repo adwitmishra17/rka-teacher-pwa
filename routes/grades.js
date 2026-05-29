@@ -15,11 +15,12 @@ router.get('/grades', requireAuth, async (req, res) => {
   }
 
   // Ownership check
+  const email = (req.user.email || '').toLowerCase()
   const { data: subject, error: sErr } = await supabase
     .from('exam_subjects')
     .select('id')
     .eq('id', subjectId)
-    .eq('assigned_teacher_id', req.user.uid)
+    .eq('assigned_teacher_email', email)
     .single()
 
   if (sErr || !subject) {
@@ -60,11 +61,12 @@ router.post('/grades', requireAuth, async (req, res) => {
   }
 
   // Ownership check — subject must be co-scholastic and assigned to this teacher
+  const email = (req.user.email || '').toLowerCase()
   const { data: subject, error: sErr } = await supabase
     .from('exam_subjects')
     .select('id, kind')
     .eq('id', subjectId)
-    .eq('assigned_teacher_id', req.user.uid)
+    .eq('assigned_teacher_email', email)
     .single()
 
   if (sErr || !subject) {

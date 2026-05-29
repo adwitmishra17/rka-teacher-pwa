@@ -85,7 +85,7 @@ export default function ExamMarksEntry() {
     setPapers([])
     setSelectedPaper(null)
     setStudents([])
-    api.getTerms(selectedSubject.sessionCode)
+    api.getTerms(selectedSubject.sessionCode, selectedSubject.branchId)
       .then(({ terms: list }) => setTerms(list))
       .catch(e => setError(e.message))
   }, [selectedSubject])

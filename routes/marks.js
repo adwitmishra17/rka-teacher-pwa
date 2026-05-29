@@ -5,14 +5,14 @@ import { supabase } from '../lib/supabase.js'
 const router = Router()
 
 // Resolve paperId → paper row, verifying the caller owns the linked subject.
-async function assertPaperOwner(paperId, uid) {
+async function assertPaperOwner(paperId, email) {
   const { data, error } = await supabase
     .from('exam_papers')
-    .select('id, max_marks, subject_id, exam_subjects(assigned_teacher_id)')
+    .select('id, max_marks, subject_id, exam_subjects(assigned_teacher_email)')
     .eq('id', paperId)
     .single()
   if (error || !data) throw Object.assign(new Error('Paper not found'), { status: 404 })
-  if (data.exam_subjects.assigned_teacher_id !== uid) {
+  if (data.exam_subjects.assigned_teacher_email !== email) {
     throw Object.assign(new Error('You are not assigned to this subject'), { status: 403 })
   }
   return data
@@ -24,8 +24,9 @@ router.get('/marks', requireAuth, async (req, res) => {
   const { paperId } = req.query
   if (!paperId) return res.status(400).json({ error: 'paperId required' })
 
+  const email = (req.user.email || '').toLowerCase()
   try {
-    await assertPaperOwner(paperId, req.user.uid)
+    await assertPaperOwner(paperId, email)
   } catch (e) {
     return res.status(e.status || 500).json({ error: e.message })
   }
@@ -63,9 +64,10 @@ router.post('/marks', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'paperId and marks[] are required' })
   }
 
+  const email = (req.user.email || '').toLowerCase()
   let paper
   try {
-    paper = await assertPaperOwner(paperId, req.user.uid)
+    paper = await assertPaperOwner(paperId, email)
   } catch (e) {
     return res.status(e.status || 500).json({ error: e.message })
   }

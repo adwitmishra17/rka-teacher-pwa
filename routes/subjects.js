@@ -6,69 +6,81 @@ import { getAdminFirestore } from '../lib/firebase-admin.js'
 const router = Router()
 
 // GET /api/my-subjects
-// Returns exam_subjects rows where assigned_teacher_id = caller's Firebase UID.
+// Returns exam_subjects rows where assigned_teacher_email = caller's lowercased email.
+// The Admin Tracker Cloud Function (syncExamSubjects) resolves the teacher's email
+// from the teachers collection and writes it here.
 router.get('/my-subjects', requireAuth, async (req, res) => {
-  const { uid } = req.user
+  const email = (req.user.email || '').toLowerCase()
+  if (!email) return res.status(400).json({ error: 'Auth token has no email claim' })
+
   const { data, error } = await supabase
     .from('exam_subjects')
-    .select('id, session_code, class_name, subject_name, kind, sort_order, branches(id, code)')
-    .eq('assigned_teacher_id', uid)
+    .select('id, session_code, class_name, subject_name, kind, sort_order, branch_id, branches(id, code)')
+    .eq('assigned_teacher_email', email)
     .order('sort_order', { ascending: true })
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) {
+    console.error('GET /api/my-subjects', error.message)
+    return res.status(500).json({ error: error.message })
+  }
 
   res.json({
-    subjects: data.map(s => ({
-      id: s.id,
+    subjects: (data ?? []).map(s => ({
+      id:          s.id,
       sessionCode: s.session_code,
-      className: s.class_name,
+      className:   s.class_name,
       subjectName: s.subject_name,
-      kind: s.kind,
-      sortOrder: s.sort_order,
-      branchId: s.branches?.id,
-      branchCode: s.branches?.code,
+      kind:        s.kind,
+      sortOrder:   s.sort_order,
+      branchId:    s.branches?.id   ?? s.branch_id,
+      branchCode:  s.branches?.code ?? null,
     })),
   })
 })
 
-// GET /api/terms?sessionCode=
-// Reads session/term config from Firestore collection `academicSessions` (written by Admin Tracker).
-// Falls back to an empty list if not configured — the Tracker must create the collection first.
+// GET /api/terms?sessionCode=&branchId=
+// Reads the term list from Supabase `exam_terms`, which the Admin Tracker's
+// syncExamTerms Cloud Function populates when the admin sets up a session.
+//
+// `id` in the response is the REAL exam_terms UUID. The PWA passes it straight
+// back as exam_papers.term_id / exam_coscholastic_grades.term_id /
+// hpc_assessments.term_id — all UUID FKs to exam_terms — so it MUST be the row
+// id, never a short code.
+//
+// branchId is required for correctness: exam_terms is unique per
+// (branch_id, session_code, short_code), so MAIN and CITY each have their own
+// term rows (distinct UUIDs) for the same session. Filtering by branch keeps a
+// teacher from seeing duplicate terms and linking a paper to the wrong branch.
+// It is treated as optional here (filter only when provided) so a missing param
+// degrades to "all branches" rather than hard-failing; every PWA caller passes it.
 router.get('/terms', requireAuth, async (req, res) => {
-  const { sessionCode } = req.query
-  const db = getAdminFirestore()
+  const { sessionCode, branchId } = req.query
+  if (!sessionCode) return res.status(400).json({ error: 'sessionCode required' })
 
-  try {
-    let session = null
+  let query = supabase
+    .from('exam_terms')
+    .select('id, name, short_code, sort_order, session_code, branch_id')
+    .eq('session_code', sessionCode)
+    .order('sort_order', { ascending: true })
 
-    if (sessionCode) {
-      const snap = await db.collection('academicSessions').doc(sessionCode).get()
-      if (snap.exists) session = { id: snap.id, ...snap.data() }
-    }
+  if (branchId) query = query.eq('branch_id', branchId)
 
-    if (!session) {
-      // Get the most-recent active session
-      const snap = await db
-        .collection('academicSessions')
-        .where('isActive', '==', true)
-        .limit(1)
-        .get()
-      if (!snap.empty) session = { id: snap.docs[0].id, ...snap.docs[0].data() }
-    }
-
-    if (!session) {
-      return res.json({ sessionCode: null, label: null, terms: [] })
-    }
-
-    res.json({
-      sessionCode: session.sessionCode ?? session.id,
-      label: session.label ?? session.id,
-      terms: session.terms ?? [],  // [{id, label}, ...]
-    })
-  } catch (e) {
-    console.error('GET /api/terms', e)
-    res.status(500).json({ error: 'Failed to fetch terms from Firestore' })
+  const { data, error } = await query
+  if (error) {
+    console.error('GET /api/terms', error.message)
+    return res.status(500).json({ error: error.message })
   }
+
+  res.json({
+    sessionCode,
+    label: sessionCode,
+    terms: (data ?? []).map(t => ({
+      id:        t.id,          // real exam_terms UUID → term_id FK
+      label:     t.name,
+      shortCode: t.short_code,
+      sortOrder: t.sort_order,
+    })),
+  })
 })
 
 // GET /api/hpc-template?sessionCode=&branchCode=

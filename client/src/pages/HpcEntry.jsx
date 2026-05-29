@@ -93,11 +93,11 @@ export default function HpcEntry() {
         }
         // Use the first subject for context (all subjects share the same branch/session)
         const s = subjects[0]
-        const ctx = { branchCode: s.branchCode, sessionCode: s.sessionCode, className: s.className }
+        const ctx = { branchCode: s.branchCode, branchId: s.branchId, sessionCode: s.sessionCode, className: s.className }
         setContext(ctx)
 
         return Promise.all([
-          api.getTerms(s.sessionCode),
+          api.getTerms(s.sessionCode, s.branchId),
           api.getHpcTemplate(s.sessionCode, s.branchCode),
           api.getStudents(s.className, s.branchCode),
         ])

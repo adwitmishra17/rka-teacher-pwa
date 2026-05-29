@@ -35,8 +35,14 @@ export const api = {
   getMySubjects: () =>
     apiFetch('/my-subjects'),
 
-  getTerms: (sessionCode) =>
-    apiFetch('/terms' + (sessionCode ? `?sessionCode=${encodeURIComponent(sessionCode)}` : '')),
+  // branchId is required so terms resolve to the caller's branch — exam_terms is
+  // unique per (branch, session, short_code), so each branch has its own UUIDs.
+  getTerms: (sessionCode, branchId) => {
+    const qs = new URLSearchParams()
+    if (sessionCode) qs.set('sessionCode', sessionCode)
+    if (branchId) qs.set('branchId', branchId)
+    return apiFetch('/terms?' + qs.toString())
+  },
 
   getHpcTemplate: (sessionCode, branchCode) =>
     apiFetch(`/hpc-template?sessionCode=${encodeURIComponent(sessionCode ?? '')}&branchCode=${encodeURIComponent(branchCode ?? '')}`),

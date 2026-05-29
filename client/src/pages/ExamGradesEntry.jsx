@@ -87,7 +87,7 @@ export default function ExamGradesEntry() {
   useEffect(() => {
     if (!selectedSubject) return
     setTerms([]); setSelectedTerm(null); setStudents([])
-    api.getTerms(selectedSubject.sessionCode)
+    api.getTerms(selectedSubject.sessionCode, selectedSubject.branchId)
       .then(({ terms: list }) => setTerms(list))
       .catch(e => setError(e.message))
   }, [selectedSubject])
