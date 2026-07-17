@@ -15,6 +15,7 @@ import MyAttendance from './pages/MyAttendance'
 import MyDocuments from './pages/MyDocuments'
 import MyStudents from './pages/MyStudents'
 import StudentAttendance from './pages/StudentAttendance'
+import ErrorBoundary from './components/ErrorBoundary'
 import EnterMarks from './pages/EnterMarks'
 import ExamMarksEntry from './pages/ExamMarksEntry'
 import ExamGradesEntry from './pages/ExamGradesEntry'
@@ -118,6 +119,7 @@ export default function App() {
       <ImpersonationBanner />
       <VersionBanner />
       <BrowserRouter>
+        <ErrorBoundary>
         <Routes>
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
           <Route path="/" element={user ? <Layout /> : <Navigate to="/login" />}>
@@ -142,6 +144,7 @@ export default function App() {
             <Route path="enter-marks" element={<Navigate to="/test-marks" replace />} />
           </Route>
         </Routes>
+        </ErrorBoundary>
       </BrowserRouter>
     </AuthContext.Provider>
   )
