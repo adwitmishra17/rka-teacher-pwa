@@ -223,7 +223,7 @@ export default function StudentAttendance() {
         </div>
       )}
 
-      {!loading && active.length > 0 && (
+      {!loading && students.length > 0 && (
         <div style={statsBarStyle}>
           <Chip label="P" count={presentCount} color="#1a4a2e" />
           <Chip label="L" count={lateCount} color="#c9a227" />
