@@ -67,16 +67,23 @@ export default function StudentAttendance() {
     if (!classTeacherOf || !branchCode) { setLoading(false); return }
     setLoading(true); setError('')
     try {
-      const studentsSnap = await getDocs(query(
-        collection(db, 'students'),
-        where('className', '==', classTeacherOf),
-        where('branchCode', '==', branchCode),
-      ))
-      // Withdrawn students are never shown in the teacher PWA — admin only.
-      const list = studentsSnap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(s => s.isActive !== false)
-        .sort((a, b) => Number(a.rollNumber || 0) - Number(b.rollNumber || 0))
+      // Roster comes LIVE from SMS (single source of truth for students).
+      // Attendance docs are keyed `${date}_${smsStudentId}` from here on.
+      const token = await (await import('../firebase/config')).auth.currentUser.getIdToken()
+      const qs = new URLSearchParams({ className: classTeacherOf, branchCode })
+      const rosterRes = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? '/api'}/students?${qs}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const rosterData = await rosterRes.json()
+      if (!rosterRes.ok) throw new Error(rosterData.error || `HTTP ${rosterRes.status}`)
+      const list = (rosterData.students || []).map(s => ({
+        id: s.id,
+        fullName: s.full_name,
+        rollNumber: s.roll_number || '',
+        admissionNo: s.admission_no,
+        className: classTeacherOf,
+        branchCode,
+      }))
       setStudents(list)
 
       const attSnap = await getDocs(query(
@@ -235,7 +242,7 @@ export default function StudentAttendance() {
       {loading && <div style={loadingStyle}>Loading roster…</div>}
       {error && <div style={errorStyle}>{error}</div>}
       {!loading && students.length === 0 && (
-        <div style={emptyBoxStyle}>No students in {classTeacherOf}. Add students via "My Class Students" first.</div>
+        <div style={emptyBoxStyle}>No active students in {classTeacherOf} in SMS. Contact the office if that looks wrong.</div>
       )}
 
       {!loading && students.length > 0 && (

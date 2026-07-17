@@ -156,7 +156,7 @@ export default function Home() {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.3, marginBottom: 4 }}>My Class Students</div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)' }}>Manage roster for {teacher.classTeacherOf}</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)' }}>Class roster for {teacher.classTeacherOf} — managed in SMS</div>
             </div>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
           </div>
