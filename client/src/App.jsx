@@ -90,7 +90,16 @@ export default function App() {
             }
           }
           if (!snap.empty) {
-            setTeacher({ id: snap.docs[0].id, ...snap.docs[0].data() })
+            const t = { id: snap.docs[0].id, ...snap.docs[0].data() }
+            // HRMS-synced inactive flag — deactivated staff cannot sign in.
+            if (t.isActive === false) {
+              alert('Your account has been deactivated. Contact the school office.')
+              await auth.signOut()
+              setUser(null)
+              setTeacher(null)
+              return
+            }
+            setTeacher(t)
           } else {
             await auth.signOut()
             setUser(null)
