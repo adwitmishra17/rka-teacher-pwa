@@ -69,7 +69,8 @@
 }
 
 .rka-attendance__name {
-  font-size: 1.35rem;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--rka-forest);
   margin: 0 0 0.35rem;
@@ -376,6 +377,6 @@
     font-size: 1.55rem;
   }
   .rka-attendance__name {
-    font-size: 1.35rem;
+    font-size: 1.5rem;
   }
 }

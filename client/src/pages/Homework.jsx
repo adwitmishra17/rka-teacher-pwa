@@ -198,7 +198,7 @@ export default function Homework() {
 
   return (
     <div style={{ padding: '20px 16px 40px', maxWidth: 560, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--green-dark)', marginBottom: 4 }}>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, color: 'var(--green-dark)', marginBottom: 4 }}>
         {editingId ? 'Edit homework' : 'Give homework'}
       </h1>
       <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
@@ -284,7 +284,7 @@ export default function Homework() {
       </div>
 
       {/* ---- my recent homework ---- */}
-      <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--green-dark)', margin: '30px 0 10px' }}>Recent homework</h2>
+      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 600, color: 'var(--green-dark)', margin: '30px 0 10px' }}>Recent homework</h2>
       {recent.length === 0 ? (
         <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Nothing given yet.</p>
       ) : recent.map(h => (

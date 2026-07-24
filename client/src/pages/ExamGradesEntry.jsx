@@ -23,7 +23,7 @@ function PageHeader({ title, subtitle, onBack }) {
           Back
         </button>
       )}
-      <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--green-dark)' }}>{title}</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, color: 'var(--green-dark)' }}>{title}</h1>
       {subtitle && <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>{subtitle}</p>}
     </div>
   )

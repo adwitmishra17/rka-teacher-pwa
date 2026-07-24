@@ -69,7 +69,7 @@ export default function Home() {
       {/* Greeting */}
       <div className="fade-up" style={{ marginBottom: 24 }}>
         <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 2 }}>{today}</p>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--green-dark)', lineHeight: 1.3 }}>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, color: 'var(--green-dark)', lineHeight: 1.3 }}>
           {greeting},<br />{teacher?.fullName?.split(' ')[0] || user?.displayName?.split(' ')[0] || 'Teacher'} ✦
         </h1>
         {myClasses.length > 0 && (

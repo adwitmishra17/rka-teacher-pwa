@@ -91,7 +91,7 @@ export default function Hub() {
 
       {/* Title + gold underline (matches admin page-header treatment) */}
       <h1 style={{
-        fontSize:20, fontWeight:700,
+        fontFamily:'var(--font-display)', fontSize:22, fontWeight:600,
         color:'var(--green-dark)', marginBottom:2, lineHeight:1.3,
       }}>
         My HRMS data
