@@ -223,7 +223,7 @@ export default function EnterMarks() {
   return (
     <div style={{ padding:'20px' }}>
       <div className="fade-up" style={{ marginBottom:20 }}>
-        <h1 style={{ fontFamily:'var(--font-display)', fontSize:22, fontWeight:600, color:'var(--green-dark)' }}>Enter Test Marks</h1>
+        <h1 style={{ fontSize:20, fontWeight:700, color:'var(--green-dark)' }}>Enter Test Marks</h1>
         <p style={{ fontSize:13, color:'var(--text-muted)', marginTop:3 }}>Select a test and enter marks for each student</p>
       </div>
 

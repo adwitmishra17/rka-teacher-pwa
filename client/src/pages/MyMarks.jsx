@@ -111,7 +111,7 @@ export default function MyMarks() {
   return (
     <div style={{ padding:'20px' }}>
       <div className="fade-up" style={{ marginBottom:20 }}>
-        <h1 style={{ fontFamily:'var(--font-display)', fontSize:22, fontWeight:600, color:'var(--green-dark)' }}>My Marks Dashboard</h1>
+        <h1 style={{ fontSize:20, fontWeight:700, color:'var(--green-dark)' }}>My Marks Dashboard</h1>
         <p style={{ fontSize:13, color:'var(--text-muted)', marginTop:3 }}>View performance test-wise, class-wise and student-wise</p>
       </div>
 

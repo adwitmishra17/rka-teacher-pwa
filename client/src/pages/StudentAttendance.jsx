@@ -310,7 +310,7 @@ function Chip({ label, count, color }) {
 
 const containerStyle = { maxWidth: 600, margin: '0 auto', padding: '16px 16px 80px' }
 const backLinkStyle = { display: 'inline-block', fontSize: 13, color: '#1a4a2e', textDecoration: 'none', marginBottom: 12 }
-const titleStyle = { fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 600, color: '#1a4a2e', margin: '0 0 4px' }
+const titleStyle = { fontSize: 20, fontWeight: 700, color: '#1a4a2e', margin: '0 0 4px' }
 const dateBarStyle = { display: 'flex', gap: 8, marginBottom: 12, overflowX: 'auto' }
 const statsBarStyle = { display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }
 const loadingStyle = { padding: '32px 16px', textAlign: 'center', color: '#6b6b6b', fontSize: 14 }

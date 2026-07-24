@@ -198,9 +198,8 @@ const backLinkStyle = {
 };
 
 const titleStyle = {
-  fontFamily: "'Playfair Display', serif",
-  fontSize: 28,
-  fontWeight: 600,
+  fontSize: 20,
+  fontWeight: 700,
   color: "#1a4a2e",
   margin: "0 0 4px 0",
   lineHeight: 1.2,

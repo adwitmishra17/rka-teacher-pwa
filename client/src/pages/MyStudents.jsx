@@ -105,7 +105,7 @@ export default function MyStudents() {
 
 const pad = { padding: '18px 16px 40px', maxWidth: 560, margin: '0 auto' }
 const back = { fontSize: 13, color: '#1a4a2e', textDecoration: 'none', display: 'inline-block', marginBottom: 10 }
-const h1 = { fontFamily: 'var(--font-display, Georgia, serif)', fontSize: 22, fontWeight: 700, color: '#1a4a2e', margin: '0 0 12px' }
+const h1 = { fontSize: 20, fontWeight: 700, color: '#1a4a2e', margin: '0 0 12px' }
 const infoBox = { padding: '12px 14px', background: '#faf9f4', border: '1px solid #e2e0d6', borderRadius: 10, fontSize: 13, color: '#6b6b6b', lineHeight: 1.5 }
 const row = { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: '#fff', border: '1px solid #eee', borderRadius: 10, marginBottom: 8 }
 const rollBadge = { minWidth: 34, height: 34, borderRadius: 8, background: '#f2f7f3', color: '#1a4a2e', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }
