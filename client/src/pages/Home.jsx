@@ -123,6 +123,13 @@ export default function Home() {
             <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>Log Today's<br />Lesson</div>
           </div>
         </Link>
+        <Link to="/homework" style={{ textDecoration: 'none' }}>
+          <div className="fade-up" style={{ background: 'var(--gold-dark)', borderRadius: 'var(--radius-lg)', padding: '20px 16px', color: 'white', position: 'relative', overflow: 'hidden', minHeight: 100 }}>
+            <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.8" style={{ marginBottom: 12 }}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /><line x1="9" y1="7" x2="17" y2="7" /><line x1="9" y1="11" x2="15" y2="11" /></svg>
+            <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>Give<br />Homework</div>
+          </div>
+        </Link>
         <Link to="/lesson-plan" style={{ textDecoration: 'none' }}>
           <div className="fade-up" style={{ background: 'var(--green-dark)', borderRadius: 'var(--radius-lg)', padding: '20px 16px', color: 'white', position: 'relative', overflow: 'hidden', minHeight: 100 }}>
             <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />

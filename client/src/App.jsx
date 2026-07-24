@@ -6,6 +6,7 @@ import { auth, db } from './firebase/config'
 import Login from './pages/Login'
 import Home from './pages/Home'
 import LogLesson from './pages/LogLesson'
+import Homework from './pages/Homework'
 import MySyllabus from './pages/MySyllabus'
 import MyMarks from './pages/MyMarks'
 import LessonPlan from './pages/LessonPlan'
@@ -134,6 +135,7 @@ export default function App() {
           <Route path="/" element={user ? <Layout /> : <Navigate to="/login" />}>
             <Route index element={<Home />} />
             <Route path="log-lesson" element={<LogLesson />} />
+            <Route path="homework" element={<Homework />} />
             <Route path="my-syllabus" element={<MySyllabus />} />
             <Route path="my-marks" element={<MyMarks />} />
             <Route path="lesson-plan" element={<LessonPlan />} />
