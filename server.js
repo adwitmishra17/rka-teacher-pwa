@@ -10,6 +10,7 @@ import papersRouter from './routes/papers.js'
 import marksRouter from './routes/marks.js'
 import gradesRouter from './routes/grades.js'
 import hpcRouter from './routes/hpc.js'
+import hikRouter from './routes/hik.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PORT = process.env.PORT || 3001
@@ -35,6 +36,12 @@ app.use(cors({
     ? process.env.CORS_ORIGIN.split(',')
     : true,
 }))
+// Hikvision attendance receiver — mounted BEFORE express.json() because the
+// devices push multipart/form-data (and sometimes >100 KB bodies with snapshot
+// images); the router does its own raw-body parsing. Device auth is a shared
+// token, not Firebase, so it lives outside /api and requireAuth.
+app.use('/hik', hikRouter)
+
 app.use(express.json())
 
 // Authenticated API responses must never be cached — not by the browser, not by
@@ -54,7 +61,7 @@ app.use('/api', hpcRouter)
 
 // Health check (Hostinger / load balancer ping). `build` doubles as a deploy
 // marker so a new release can be confirmed live without an authenticated call.
-app.get('/health', (_req, res) => res.json({ ok: true, build: 'ws-fix' }))
+app.get('/health', (_req, res) => res.json({ ok: true, build: 'hik-receiver' }))
 
 // Serve the React build. express.static is safe even if the folder doesn't
 // exist yet — it just passes through. The catch-all checks for index.html
