@@ -65,6 +65,11 @@ export default function ExamMarksEntry() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  // Progress save — persists what's entered so far without the review flow.
+  const [progressSaving, setProgressSaving] = useState(false)
+  const [progressMsg, setProgressMsg] = useState('')
+  const [dirty, setDirty] = useState(false)
+  useEffect(() => { setDirty(false); setProgressMsg('') }, [selectedPaper?.id])
   const [showReview, setShowReview] = useState(false)
   const [error, setError] = useState('')
   const [saveResult, setSaveResult] = useState(null)
@@ -170,6 +175,42 @@ export default function ExamMarksEntry() {
       }
       return next
     }))
+    setDirty(true)
+    setProgressMsg('')
+  }
+
+  // Save only what's been touched so far — the server upserts per student, so
+  // untouched students stay exactly as they are in the database. This is the
+  // "phone rang mid-entry" safety valve; Review & Save stays the final word.
+  async function handleSaveProgress() {
+    if (!selectedPaper) return
+    const hp = !!selectedPaper.has_practical
+    const touched = students.filter(s => s.isAbsent
+      || (hp ? (s.theoryMarks !== '' || s.practicalMarks !== '') : s.marks !== ''))
+    if (touched.length === 0) return
+    setProgressSaving(true)
+    setError('')
+    try {
+      const payload = touched.map(s => hp
+        ? {
+            admissionNo: s.admissionNo,
+            theoryObtained: s.isAbsent ? 0 : Number(s.theoryMarks || 0),
+            practicalObtained: s.isAbsent ? 0 : Number(s.practicalMarks || 0),
+            isAbsent: s.isAbsent,
+          }
+        : {
+            admissionNo: s.admissionNo,
+            marksObtained: s.isAbsent ? 0 : Number(s.marks || 0),
+            isAbsent: s.isAbsent,
+          })
+      await api.saveMarks(selectedPaper.id, payload)
+      setDirty(false)
+      const t = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+      setProgressMsg(`Saved ${touched.length} of ${students.length} · ${t}`)
+    } catch (e) {
+      setError(e.message)
+    }
+    setProgressSaving(false)
   }
 
   async function handleSavePaper() {
@@ -596,6 +637,19 @@ export default function ExamMarksEntry() {
               </div>
             ))}
           </div>
+
+          {/* Sticky progress-save — always reachable mid-list on a phone. */}
+          {students.length > 0 && (
+            <div style={{ position: 'sticky', bottom: 12, zIndex: 5, margin: '12px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button onClick={handleSaveProgress} disabled={progressSaving || !dirty}
+                style={{ flex: 1, padding: '12px', background: 'white', color: (!dirty || progressSaving) ? 'var(--gray-400)' : 'var(--green)', border: `1.5px solid ${(!dirty || progressSaving) ? 'var(--gray-200)' : 'var(--green)'}`, borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 600, cursor: (!dirty || progressSaving) ? 'default' : 'pointer', boxShadow: '0 4px 14px rgba(26,74,46,0.12)' }}>
+                {progressSaving ? 'Saving…' : dirty ? 'Save progress' : progressMsg || 'Save progress'}
+              </button>
+            </div>
+          )}
+          {progressMsg && dirty === false && (
+            <p style={{ fontSize: 12, color: 'var(--green-dark)', textAlign: 'center', margin: '0 0 10px' }}>✓ {progressMsg}</p>
+          )}
 
           <button onClick={() => setShowReview(true)} disabled={saving || students.length === 0}
             style={{ width: '100%', padding: '15px', background: students.length === 0 ? 'var(--gray-200)' : 'var(--green)', color: students.length === 0 ? 'var(--gray-400)' : 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: 15, fontWeight: 600, cursor: students.length === 0 ? 'not-allowed' : 'pointer', boxShadow: students.length === 0 ? 'none' : '0 4px 14px rgba(26,74,46,0.25)' }}>

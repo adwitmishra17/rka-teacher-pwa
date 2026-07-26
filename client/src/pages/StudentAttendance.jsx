@@ -62,6 +62,23 @@ export default function StudentAttendance() {
   const [attendance, setAttendance] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  // Explicit-save model: taps only change local state; `dirty` maps
+  // studentId → { before, after } until Save commits the batch.
+  // `before` is the ORIGINAL server state (kept across re-taps) so the
+  // audit trail records the true transition, and a tap back to the
+  // original state drops the entry from the batch entirely.
+  const [dirty, setDirty] = useState({})
+  const [savingAll, setSavingAll] = useState(false)
+  const [savedFlash, setSavedFlash] = useState(false)
+  const dirtyCount = Object.keys(dirty).length
+
+  // Don't let a phone back-swipe or tab close silently eat unsaved marks.
+  useEffect(() => {
+    if (dirtyCount === 0) return
+    const warn = (e) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirtyCount])
 
   async function load() {
     if (!classTeacherOf || !branchCode) { setLoading(false); return }
@@ -98,6 +115,7 @@ export default function StudentAttendance() {
         map[x.studentId] = { status: x.status, isLate: x.isLate, docId: d.id, markedAt: x.markedAt }
       })
       setAttendance(map)
+      setDirty({})
     } catch (e) {
       console.error(e); setError(e.message || String(e))
     } finally {
@@ -114,63 +132,107 @@ export default function StudentAttendance() {
     }
   }
 
-  async function mark(student, target) {
+  // Tap = LOCAL change only. Nothing touches Firestore until Save.
+  function mark(student, target) {
     if (!isWithinTeacherEditWindow(selectedDate)) {
       alert('This date is outside your 7-day edit window. Contact admin to make changes.')
       return
     }
-    const docId = docIdFor(selectedDate, student.id)
-    const before = attendance[student.id] || null
-    const ref = doc(db, 'studentAttendance', docId)
+    const current = attendance[student.id] || null
+    const existingDirty = dirty[student.id]
+    // The audit `before` is the original SERVER state — first tap captures it,
+    // later taps on the same student keep it.
+    const original = existingDirty ? existingDirty.before : current
 
+    let after
     if (target === 'unmark') {
-      if (!before) return
-      setAttendance(prev => { const next = { ...prev }; delete next[student.id]; return next })
+      if (!current) return
+      after = null
+    } else {
+      after = target === 'absent'
+        ? { status: 'absent', isLate: false }
+        : { status: 'present', isLate: target === 'late' }
+    }
+
+    // Local display state
+    setAttendance(prev => {
+      const next = { ...prev }
+      if (after === null) delete next[student.id]
+      else next[student.id] = { ...after, markedAt: original?.markedAt }
+      return next
+    })
+
+    // Dirty bookkeeping — tapping back to the original state removes the entry.
+    setDirty(prev => {
+      const next = { ...prev }
+      const same = after === null
+        ? original === null
+        : original != null && original.status === after.status && !!original.isLate === !!after.isLate
+      if (same) delete next[student.id]
+      else next[student.id] = { before: original, after, student }
+      return next
+    })
+    setSavedFlash(false)
+  }
+
+  // Commit every pending change in one go: writes + audit rows per student.
+  async function saveAll() {
+    if (dirtyCount === 0 || savingAll) return
+    setSavingAll(true)
+    const entries = Object.entries(dirty)
+    const failures = []
+    await Promise.all(entries.map(async ([studentId, { before, after, student }]) => {
+      const docId = docIdFor(selectedDate, studentId)
+      const ref = doc(db, 'studentAttendance', docId)
       try {
-        await deleteDoc(ref)
-        await writeAttendanceAudit({
-          attendanceDocId: docId,
-          student: { ...student, branchCode, className: classTeacherOf },
-          date: selectedDate, action: 'unmark',
-          before: { status: before.status, isLate: before.isLate }, after: null,
-          ...actor(),
-        })
+        if (after === null) {
+          await deleteDoc(ref)
+          await writeAttendanceAudit({
+            attendanceDocId: docId,
+            student: { ...student, branchCode, className: classTeacherOf },
+            date: selectedDate, action: 'unmark',
+            before: { status: before.status, isLate: before.isLate }, after: null,
+            ...actor(),
+          })
+        } else {
+          const a = actor()
+          const payload = {
+            studentId, studentName: student.fullName || '',
+            rollNumber: student.rollNumber || '',
+            className: classTeacherOf, branchCode, date: selectedDate,
+            status: after.status, isLate: after.isLate,
+            markedBy: a.performedBy, markedByName: a.performedByName, markedByRole: 'class_teacher',
+            markedAt: before?.markedAt || Timestamp.now(),
+            editedAt: before ? Timestamp.now() : null,
+            editedBy: before ? a.performedBy : null,
+          }
+          await setDoc(ref, payload)
+          await writeAttendanceAudit({
+            attendanceDocId: docId,
+            student: { ...student, branchCode, className: classTeacherOf },
+            date: selectedDate, action: before ? 'edit' : 'mark',
+            before: before ? { status: before.status, isLate: before.isLate } : null,
+            after,
+            ...a,
+          })
+        }
       } catch (e) {
-        alert('Failed: ' + (e.message || e)); load()
+        failures.push(`${student.fullName}: ${e.message || e}`)
       }
-      return
+    }))
+    setSavingAll(false)
+    if (failures.length > 0) {
+      alert(`Some marks failed to save:\n${failures.join('\n')}`)
+      load()
+    } else {
+      setDirty({})
+      setSavedFlash(true)
+      setTimeout(() => setSavedFlash(false), 2500)
     }
+  }
 
-    const newState = target === 'absent'
-      ? { status: 'absent', isLate: false }
-      : { status: 'present', isLate: target === 'late' }
-
-    setAttendance(prev => ({ ...prev, [student.id]: { ...newState, docId } }))
-    try {
-      const action = before ? 'edit' : 'mark'
-      const a = actor()
-      const payload = {
-        studentId: student.id, studentName: student.fullName || '',
-        rollNumber: student.rollNumber || '',
-        className: classTeacherOf, branchCode, date: selectedDate,
-        ...newState,
-        markedBy: a.performedBy, markedByName: a.performedByName, markedByRole: 'class_teacher',
-        markedAt: before?.markedAt || Timestamp.now(),
-        editedAt: before ? Timestamp.now() : null,
-        editedBy: before ? a.performedBy : null,
-      }
-      await setDoc(ref, payload)
-      await writeAttendanceAudit({
-        attendanceDocId: docId,
-        student: { ...student, branchCode, className: classTeacherOf },
-        date: selectedDate, action,
-        before: before ? { status: before.status, isLate: before.isLate } : null,
-        after: newState,
-        ...a,
-      })
-    } catch (e) {
-      alert('Failed: ' + (e.message || e)); load()
-    }
+  function discardChanges() {
+    load()
   }
 
   // Guards
@@ -208,7 +270,11 @@ export default function StudentAttendance() {
             const isActiveDate = d === selectedDate
             const sunday = isSunday(d)
             return (
-              <button key={d} onClick={() => setSelectedDate(d)} style={{
+              <button key={d} onClick={() => {
+                if (d !== selectedDate && dirtyCount > 0
+                  && !window.confirm('You have unsaved attendance changes. Discard them and switch date?')) return
+                setSelectedDate(d)
+              }} style={{
                 padding: '7px 11px', borderRadius: 6,
                 border: '1px solid', borderColor: isActiveDate ? '#1a4a2e' : '#d9d6cb',
                 background: isActiveDate ? '#1a4a2e' : '#fff',
@@ -278,6 +344,39 @@ export default function StudentAttendance() {
             )
           })}
         </ul>
+      )}
+
+      {/* Sticky save bar — appears only when there are unsaved changes. */}
+      {(dirtyCount > 0 || savedFlash) && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
+          background: 'rgba(250,249,245,0.96)', borderTop: '1px solid #e8e6dc',
+          padding: '10px 16px calc(10px + env(safe-area-inset-bottom))',
+        }}>
+          <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+            {savedFlash && dirtyCount === 0 ? (
+              <div style={{ flex: 1, textAlign: 'center', fontSize: 13.5, fontWeight: 600, color: '#1a4a2e' }}>
+                ✓ Attendance saved
+              </div>
+            ) : (
+              <>
+                <button onClick={discardChanges} disabled={savingAll} style={{
+                  padding: '11px 14px', background: '#fff', border: '1px solid #d9d6cb',
+                  borderRadius: 8, color: '#6b6b6b', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                }}>
+                  Discard
+                </button>
+                <button onClick={saveAll} disabled={savingAll} style={{
+                  flex: 1, padding: '11px', background: savingAll ? '#9db3a5' : '#1a4a2e',
+                  border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 700,
+                  cursor: savingAll ? 'default' : 'pointer', boxShadow: '0 4px 14px rgba(26,74,46,0.25)',
+                }}>
+                  {savingAll ? 'Saving…' : `Save attendance (${dirtyCount} change${dirtyCount === 1 ? '' : 's'})`}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
