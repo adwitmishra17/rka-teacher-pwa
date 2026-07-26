@@ -32,10 +32,35 @@ const SUCCESS_MINOR_CODES = new Set([75, 38])
 // Snapshot payloads can reach a few hundred KB; 10 MB is comfortable headroom.
 const rawBody = express.raw({ type: () => true, limit: '10mb' })
 
+// Liveness ledger — every AUTHENTICATED device request (heartbeats included,
+// which never reach the database) stamps its branch here. In-memory on
+// purpose: a restart repopulates within one heartbeat interval.
+const deviceSeen = new Map() // branch -> { mac, lastSeenMs }
+
+function markSeen(branch, mac) {
+  const cur = deviceSeen.get(branch) || {}
+  deviceSeen.set(branch, { mac: mac || cur.mac || null, lastSeenMs: Date.now() })
+}
+
 // Deploy/config probe: confirms the route is live and env vars landed,
 // without leaking any values. Safe to open in a browser.
 router.get('/health', (_req, res) => {
   res.json({ ok: true, configured: hrmsConfigured() })
+})
+
+// Public read-only device liveness for the HRMS dashboard. No secrets, no
+// MACs beyond what the school's own devices broadcast; CORS open because the
+// HRMS admin runs on a different origin (Vercel).
+router.get('/status', (_req, res) => {
+  res.set('Access-Control-Allow-Origin', '*')
+  res.set('Cache-Control', 'no-store')
+  const now = Date.now()
+  const devices = [...deviceSeen.entries()].map(([branch, d]) => ({
+    branch,
+    secondsAgo: Math.round((now - d.lastSeenMs) / 1000),
+    online: now - d.lastSeenMs < 90_000,
+  }))
+  res.json({ now: new Date(now).toISOString(), devices })
 })
 
 router.post('/punch', rawBody, async (req, res) => {
@@ -71,7 +96,12 @@ async function handlePunch(req, res) {
   }
 
   const providedSecret = queryToken || basicPassword
-  if (!providedSecret || providedSecret !== HIK_SECRET) {
+  const authed = providedSecret && providedSecret === HIK_SECRET
+  if (authed) {
+    // Any valid device request — heartbeat or punch — proves the device is up.
+    markSeen(String(req.query.branch || 'MAIN').toUpperCase())
+  }
+  if (!authed) {
     const authScheme = authHeader.split(' ')[0] || '(none)'
     console.log('[hik] auth_failed: scheme=%s header_len=%d query_token_present=%s',
       JSON.stringify(authScheme), authHeader.length, !!queryToken)
