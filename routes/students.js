@@ -29,6 +29,10 @@ router.get('/students', requireAuth, async (req, res) => {
     .eq('class_name', className)
     .eq('branch_id', branch.id)
     .eq('is_active', true)
+    // Non-regular students (attachments / own reduced-fee) exist for board
+    // records only — they never attend, so they must not appear on any
+    // teacher-facing roster (attendance, marks, co-scholastic grades).
+    .eq('enrollment_kind', 'regular')
     .order('roll_number', { ascending: true })
 
   if (error) return res.status(500).json({ error: error.message })
