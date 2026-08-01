@@ -184,6 +184,10 @@ export default function Layout() {
       {/* ── Page content ───────────────────────────────────────────────────── */}
       <main style={{ flex:1, overflowY:'auto', paddingBottom:`calc(72px + var(--safe-bottom))` }}>
         <Outlet />
+        {/* society credit */}
+        <div style={{ textAlign:'center', fontSize:10.5, color:'var(--text-muted)', padding:'18px 16px 6px', lineHeight:1.4 }}>
+          crafted with <span style={{ color:'#e25555' }}>♥</span> by Radhakrishna Educational Society
+        </div>
       </main>
 
       {/* ── Bottom navigation ──────────────────────────────────────────────── */}
