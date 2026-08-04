@@ -4,11 +4,17 @@ import { supabase } from '../lib/supabase.js'
 
 const router = Router()
 
-// GET /api/students?className=&branchCode=
+// GET /api/students?className=&branchCode=&subject=
 // Returns active students for the given class + branch.
 // Branch is resolved by code ('MAIN'/'CITY') → UUID server-side (rule #3).
+//
+// `subject` (optional) enables optional-subject scoping for Class 11/12
+// electives: if it's passed AND at least one student in the class picked it as
+// their optional subject, only those students are returned — so an elective's
+// teacher (Computer Science, Hindi, Physical Education, or Maths-for-Commerce)
+// marks just their own roster. See the scoping note below.
 router.get('/students', requireAuth, async (req, res) => {
-  const { className, branchCode } = req.query
+  const { className, branchCode, subject } = req.query
   if (!className || !branchCode) {
     return res.status(400).json({ error: 'className and branchCode are required' })
   }
@@ -25,7 +31,7 @@ router.get('/students', requireAuth, async (req, res) => {
 
   const { data, error } = await supabase
     .from('students')
-    .select('id, full_name, admission_no, roll_number, class_name, section, father_name, photo_key')
+    .select('id, full_name, admission_no, roll_number, class_name, section, father_name, photo_key, optional_subject')
     .eq('class_name', className)
     .eq('branch_id', branch.id)
     .eq('is_active', true)
@@ -37,7 +43,25 @@ router.get('/students', requireAuth, async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message })
 
-  res.json({ students: data })
+  // Optional-subject scoping (Class 11/12 electives). If a `subject` is given AND
+  // ≥1 student in this class took it as their optional subject, it's an elective
+  // → return only those students. Otherwise it's a core subject (or no subject)
+  // → whole class. This is DATA-DRIVEN on purpose: it needs no per-subject flag
+  // (exam_subjects.is_optional is unused) and self-resolves the core/elective
+  // ambiguity per class — e.g. "Mathematics" scopes for Commerce (students opt
+  // in) but stays whole-class for Science, where nobody opts in because it's the
+  // PCM core. Subject names align exactly with students.optional_subject.
+  let students = data ?? []
+  let scopedToOptional = false
+  if (subject) {
+    const takers = students.filter((s) => s.optional_subject === subject)
+    if (takers.length > 0) {
+      students = takers
+      scopedToOptional = true
+    }
+  }
+
+  res.json({ students, scopedToOptional, subject: scopedToOptional ? subject : null })
 })
 
 export default router

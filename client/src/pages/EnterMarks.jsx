@@ -23,6 +23,8 @@ export default function EnterMarks() {
   const EDIT_WINDOW_MS = 10 * 60 * 1000
   const [firstEnteredMs, setFirstEnteredMs] = useState(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
+  // Non-null when the roster was narrowed to an elective's takers → { subject, count }
+  const [rosterScoped, setRosterScoped] = useState(null)
   useEffect(() => { const t = setInterval(() => setNowMs(Date.now()), 1000); return () => clearInterval(t) }, [])
   const lock = firstEnteredMs == null
     ? { locked: false, editable: false, msRemaining: 0 }
@@ -72,6 +74,7 @@ export default function EnterMarks() {
     setStudents([])
     setStudentCount('')
     setFirstEnteredMs(null)
+    setRosterScoped(null)
 
     let cancelled = false
     ;(async () => {
@@ -84,7 +87,9 @@ export default function EnterMarks() {
         //    to merge with the Firestore testMarks below. This replaced the
         //    Firestore students-mirror read, which could lag on bulk re-rolls
         //    (blank-roll students silently dropped from the roster).
-        const { students: roster } = await api.getStudents(selectedTest.className, branchCode)
+        // Pass the test's subject so an elective (Computer Science / Hindi /
+        // Physical Education / Maths-for-Commerce) is scoped to just its takers.
+        const { students: roster, scopedToOptional } = await api.getStudents(selectedTest.className, branchCode, selectedTest.subject)
         const rosterByRoll = new Map()   // rollNumber (canonical string) → { studentId, fullName, isActive }
         for (const s of (roster || [])) {
           const key = String(s.roll_number || '').trim()
@@ -129,7 +134,10 @@ export default function EnterMarks() {
         // 5. Sort numerically by rollNumber so the order matches admit-list order
         merged.sort((a, b) => Number(a.rollNumber || 0) - Number(b.rollNumber || 0))
 
-        if (!cancelled) setStudents(merged)
+        if (!cancelled) {
+          setStudents(merged)
+          setRosterScoped(scopedToOptional ? { subject: selectedTest.subject, count: merged.length } : null)
+        }
       } catch (e) {
         console.error('Failed to load students/marks for entry:', e)
       }
@@ -417,6 +425,14 @@ export default function EnterMarks() {
             <div style={{ display:'flex', alignItems:'center', gap:8, background:'var(--gold-light)', border:'1px solid rgba(201,162,39,0.3)', borderRadius:'var(--radius-md)', padding:'11px 14px', marginBottom:16, fontSize:12.5, color:'var(--gold-dark)' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <strong>{fmtCountdown(lock.msRemaining)}</strong> left to edit — after that these marks lock (office edits only).
+            </div>
+          )}
+
+          {/* Elective roster note — only this subject's students are shown */}
+          {rosterScoped && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, background:'#eef5ee', border:'1px solid rgba(46,125,50,0.25)', borderRadius:'var(--radius-md)', padding:'11px 14px', marginBottom:16, fontSize:12.5, color:'var(--green-mid)' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+              Optional subject — showing only the <strong>{rosterScoped.count}</strong> student{rosterScoped.count === 1 ? '' : 's'} who take <strong>{rosterScoped.subject}</strong>.
             </div>
           )}
 

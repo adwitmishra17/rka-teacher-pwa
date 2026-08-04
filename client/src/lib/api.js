@@ -48,8 +48,8 @@ export const api = {
     apiFetch(`/hpc-template?sessionCode=${encodeURIComponent(sessionCode ?? '')}&branchCode=${encodeURIComponent(branchCode ?? '')}`),
 
   // --- Roster ---
-  getStudents: (className, branchCode) =>
-    apiFetch(`/students?className=${encodeURIComponent(className)}&branchCode=${encodeURIComponent(branchCode)}`),
+  getStudents: (className, branchCode, subject) =>
+    apiFetch(`/students?className=${encodeURIComponent(className)}&branchCode=${encodeURIComponent(branchCode)}${subject ? `&subject=${encodeURIComponent(subject)}` : ''}`),
 
   // --- Papers ---
   getPapers: (subjectId, termId) =>

@@ -80,6 +80,8 @@ export default function ExamMarksEntry() {
   const EDIT_WINDOW_MS = 10 * 60 * 1000
   const [firstEnteredMs, setFirstEnteredMs] = useState(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
+  // Non-null when the roster was narrowed to an elective's takers → { subject, count }
+  const [rosterScoped, setRosterScoped] = useState(null)
   useEffect(() => { const t = setInterval(() => setNowMs(Date.now()), 1000); return () => clearInterval(t) }, [])
   const lock = firstEnteredMs == null
     ? { locked: false, editable: false, msRemaining: 0 }
@@ -114,13 +116,17 @@ export default function ExamMarksEntry() {
     if (!selectedSubject || !selectedTerm) return
     setPapers([])
     setSelectedPaper(null)
+    setRosterScoped(null)
 
     const loadPapers = api.getPapers(selectedSubject.id, selectedTerm.id)
       .then(({ papers: list }) => setPapers(list))
       .catch(e => setError(e.message))
 
-    const loadStudents = api.getStudents(selectedSubject.className, selectedSubject.branchCode)
-      .then(({ students: list }) => {
+    // Pass the subject so an elective (Computer Science / Hindi / Physical
+    // Education / Maths-for-Commerce) is scoped to just the students who took it.
+    const loadStudents = api.getStudents(selectedSubject.className, selectedSubject.branchCode, selectedSubject.subjectName)
+      .then(({ students: list, scopedToOptional }) => {
+        setRosterScoped(scopedToOptional ? { subject: selectedSubject.subjectName, count: list.length } : null)
         setStudents(list.map(s => ({
           admissionNo: s.admission_no,
           name: s.full_name,
@@ -597,6 +603,14 @@ export default function ExamMarksEntry() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--gold-light)', border: '1px solid rgba(201,162,39,0.3)', borderRadius: 'var(--radius-md)', padding: '11px 14px', marginBottom: 16, fontSize: 12.5, color: 'var(--gold-dark)' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <strong>{fmtCountdown(lock.msRemaining)}</strong> left to edit — after that these marks lock (office edits only).
+            </div>
+          )}
+
+          {/* Elective roster note — only this subject's students are shown */}
+          {rosterScoped && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#eef5ee', border: '1px solid rgba(46,125,50,0.25)', borderRadius: 'var(--radius-md)', padding: '11px 14px', marginBottom: 16, fontSize: 12.5, color: 'var(--green-mid)' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+              Optional subject — showing only the <strong>{rosterScoped.count}</strong> student{rosterScoped.count === 1 ? '' : 's'} who take <strong>{rosterScoped.subject}</strong>.
             </div>
           )}
 
