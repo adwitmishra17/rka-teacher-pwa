@@ -17,6 +17,20 @@ export default function EnterMarks() {
   const [studentCount, setStudentCount] = useState('')
   const [loading, setLoading] = useState(true)
 
+  // 10-minute edit window (per test, like the lesson log): once marks are first
+  // entered, the sheet is editable for 10 min, then read-only. firstEnteredMs =
+  // the test's earliest testMarks.createdAt (null until marks exist).
+  const EDIT_WINDOW_MS = 10 * 60 * 1000
+  const [firstEnteredMs, setFirstEnteredMs] = useState(null)
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => { const t = setInterval(() => setNowMs(Date.now()), 1000); return () => clearInterval(t) }, [])
+  const lock = firstEnteredMs == null
+    ? { locked: false, editable: false, msRemaining: 0 }
+    : (nowMs - firstEnteredMs < EDIT_WINDOW_MS
+        ? { locked: false, editable: true, msRemaining: EDIT_WINDOW_MS - (nowMs - firstEnteredMs) }
+        : { locked: true, editable: false, msRemaining: 0 })
+  const fmtCountdown = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
+
   const [myClasses, setMyClasses] = useState([])
   useEffect(() => {
     if (teacher || user) getTeacherClasses(teacher, user).then(setMyClasses)
@@ -57,6 +71,7 @@ export default function EnterMarks() {
     if (!selectedTest) return
     setStudents([])
     setStudentCount('')
+    setFirstEnteredMs(null)
 
     let cancelled = false
     ;(async () => {
@@ -82,11 +97,15 @@ export default function EnterMarks() {
           where('testId', '==', selectedTest.id),
         ))
         const marksByRoll = new Map()   // rollNumber → testMarks doc
+        let earliestCreatedMs = null    // first-entry timestamp → drives the 10-min lock
         marksSnap.forEach(d => {
           const m = { docId: d.id, ...d.data() }
           const key = String(m.rollNumber || '').trim()
           if (key) marksByRoll.set(key, m)
+          const created = m.createdAt?.toDate ? m.createdAt.toDate().getTime() : null
+          if (created != null && (earliestCreatedMs == null || created < earliestCreatedMs)) earliestCreatedMs = created
         })
+        if (!cancelled) setFirstEnteredMs(earliestCreatedMs)
 
         // 3. Merge. Active roster students only — withdrawn students are never
         //    shown in the teacher PWA. Their existing testMarks rows are left
@@ -128,6 +147,7 @@ export default function EnterMarks() {
   }
 
   function updateStudent(idx, field, value) {
+    if (lock.locked) return   // past the 10-minute window — read-only
     // Validate marks field — clamp to [0, maxMarks]
     if (field === 'marks' && value !== '' && selectedTest) {
       const maxMarks = Number(selectedTest.maxMarks || 0)
@@ -141,6 +161,8 @@ export default function EnterMarks() {
 
   async function handleSubmit() {
     if (!selectedTest || students.length === 0) return
+    if (lock.locked) return   // 10-minute edit window passed
+
     // Ownership guard: only the teacher who owns this test can save marks for it
     const teacherIdMatch = teacher?.id
     const teacherNameLower = (teacher?.fullName || '').toLowerCase().trim()
@@ -192,17 +214,19 @@ export default function EnterMarks() {
           isAbsent: s.isAbsent,
           percentage: s.isAbsent ? 0 : Math.round((marksNum / maxMarks) * 100),
           branchCode,
-          createdAt: Timestamp.now()
         }
         const rollKey = String(s.rollNumber || '').trim()
         const existing = rollKey ? existingByRoll[rollKey] : null
         if (existing) {
+          // Preserve the original createdAt (first entry) so the 10-min window
+          // measures from entry, not last edit.
           await updateDoc(doc(db, 'testMarks', existing.docId), data)
         } else {
-          await addDoc(collection(db, 'testMarks'), data)
+          await addDoc(collection(db, 'testMarks'), { ...data, createdAt: Timestamp.now() })
         }
       }
       await updateDoc(doc(db, 'tests', selectedTest.id), { marksEntered: true })
+      if (firstEnteredMs == null) setFirstEnteredMs(Date.now())   // first entry → start the 10-min window now
       setSaved(true)
     } catch(e) { console.error(e) }
     setSaving(false)
@@ -382,9 +406,23 @@ export default function EnterMarks() {
             </div>
           )}
 
+          {/* 10-minute edit-window banner */}
+          {lock.locked && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, background:'#f5f4ef', border:'1px solid #d9d6cb', borderRadius:'var(--radius-md)', padding:'11px 14px', marginBottom:16, fontSize:12.5, color:'#7a7768' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              These marks are <strong style={{ color:'#5c5a4f' }}>locked</strong> — editable only within 10 minutes of first entry. Ask the office to change them.
+            </div>
+          )}
+          {lock.editable && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, background:'var(--gold-light)', border:'1px solid rgba(201,162,39,0.3)', borderRadius:'var(--radius-md)', padding:'11px 14px', marginBottom:16, fontSize:12.5, color:'var(--gold-dark)' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <strong>{fmtCountdown(lock.msRemaining)}</strong> left to edit — after that these marks lock (office edits only).
+            </div>
+          )}
+
           {/* Student rows */}
           {students.length > 0 && (
-            <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:20, pointerEvents: lock.locked ? 'none' : 'auto', opacity: lock.locked ? 0.55 : 1 }}>
               {students.map((s, i) => (
                 <div key={i} style={{ background: s.isAbsent ? 'var(--crimson-light)' : 'var(--white)', borderRadius:'var(--radius-md)', border:`1px solid ${s.isAbsent ? 'rgba(139,26,26,0.15)' : 'var(--gray-100)'}`, padding:'12px 14px', transition:'all 0.15s' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: s.isAbsent ? 0 : 8 }}>
@@ -419,8 +457,8 @@ export default function EnterMarks() {
           )}
 
           {students.length > 0 && (
-            <button onClick={() => setShowReview(true)} disabled={saving} style={{ width:'100%', padding:'15px', background: saving ? 'var(--gray-200)' : 'var(--green)', color: saving ? 'var(--gray-400)' : 'white', border:'none', borderRadius:'var(--radius-md)', fontSize:15, fontWeight:600, cursor: saving ? 'not-allowed' : 'pointer', boxShadow: saving ? 'none' : '0 4px 14px rgba(26,74,46,0.25)' }}>
-              {saving ? 'Saving marks…' : `Review & Save Marks (${students.length} students)`}
+            <button onClick={() => setShowReview(true)} disabled={saving || lock.locked} style={{ width:'100%', padding:'15px', background: (saving || lock.locked) ? 'var(--gray-200)' : 'var(--green)', color: (saving || lock.locked) ? 'var(--gray-400)' : 'white', border:'none', borderRadius:'var(--radius-md)', fontSize:15, fontWeight:600, cursor: (saving || lock.locked) ? 'not-allowed' : 'pointer', boxShadow: (saving || lock.locked) ? 'none' : '0 4px 14px rgba(26,74,46,0.25)' }}>
+              {lock.locked ? 'Locked — 10-minute edit window passed' : saving ? 'Saving marks…' : `Review & Save Marks (${students.length} students)`}
             </button>
           )}
         </>

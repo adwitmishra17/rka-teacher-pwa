@@ -74,6 +74,20 @@ export default function ExamMarksEntry() {
   const [error, setError] = useState('')
   const [saveResult, setSaveResult] = useState(null)
 
+  // 10-minute edit window (per paper, like the lesson log): once marks are first
+  // entered, the sheet is editable for 10 min, then read-only (office edits only).
+  // firstEnteredMs = the paper's earliest entered_at (null until marks exist).
+  const EDIT_WINDOW_MS = 10 * 60 * 1000
+  const [firstEnteredMs, setFirstEnteredMs] = useState(null)
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => { const t = setInterval(() => setNowMs(Date.now()), 1000); return () => clearInterval(t) }, [])
+  const lock = firstEnteredMs == null
+    ? { locked: false, editable: false, msRemaining: 0 }
+    : (nowMs - firstEnteredMs < EDIT_WINDOW_MS
+        ? { locked: false, editable: true, msRemaining: EDIT_WINDOW_MS - (nowMs - firstEnteredMs) }
+        : { locked: true, editable: false, msRemaining: 0 })
+  const fmtCountdown = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
+
   // ── Load subjects on mount ──────────────────────────────────
   useEffect(() => {
     api.getMySubjects()
@@ -125,8 +139,10 @@ export default function ExamMarksEntry() {
   // ── When paper chosen → pre-populate existing marks ─────────
   useEffect(() => {
     if (!selectedPaper) return
+    setFirstEnteredMs(null)
     api.getMarks(selectedPaper.id)
-      .then(({ marks: existing }) => {
+      .then(({ marks: existing, firstEnteredAt }) => {
+        setFirstEnteredMs(firstEnteredAt ? new Date(firstEnteredAt).getTime() : null)
         if (!existing.length) return
         const byAdmission = new Map(existing.map(m => [m.admissionNo, m]))
         const hp = !!selectedPaper.has_practical
@@ -150,6 +166,7 @@ export default function ExamMarksEntry() {
   }, [selectedPaper])
 
   function updateMark(idx, field, value) {
+    if (lock.locked) return   // past the 10-minute window — read-only
     // Clamp single-score entry to max_marks (non-practical papers).
     if (field === 'marks' && value !== '' && selectedPaper) {
       const max = Number(selectedPaper.max_marks ?? 0)
@@ -183,7 +200,7 @@ export default function ExamMarksEntry() {
   // untouched students stay exactly as they are in the database. This is the
   // "phone rang mid-entry" safety valve; Review & Save stays the final word.
   async function handleSaveProgress() {
-    if (!selectedPaper) return
+    if (!selectedPaper || lock.locked) return
     const hp = !!selectedPaper.has_practical
     const touched = students.filter(s => s.isAbsent
       || (hp ? (s.theoryMarks !== '' || s.practicalMarks !== '') : s.marks !== ''))
@@ -205,6 +222,7 @@ export default function ExamMarksEntry() {
           })
       await api.saveMarks(selectedPaper.id, payload)
       setDirty(false)
+      if (firstEnteredMs == null) setFirstEnteredMs(Date.now())   // first entry → start the 10-min window now
       const t = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
       setProgressMsg(`Saved ${touched.length} of ${students.length} · ${t}`)
     } catch (e) {
@@ -249,7 +267,7 @@ export default function ExamMarksEntry() {
   }
 
   async function handleSubmitMarks() {
-    if (!selectedPaper || students.length === 0) return
+    if (!selectedPaper || students.length === 0 || lock.locked) return
     setSaving(true)
     setError('')
     try {
@@ -267,6 +285,7 @@ export default function ExamMarksEntry() {
             isAbsent: s.isAbsent,
           })
       const result = await api.saveMarks(selectedPaper.id, payload)
+      if (firstEnteredMs == null) setFirstEnteredMs(Date.now())   // first entry → start the 10-min window now
       setSaveResult(result)
       setSaved(true)
     } catch (e) {
@@ -567,6 +586,20 @@ export default function ExamMarksEntry() {
             </div>
           </div>
 
+          {/* 10-minute edit-window banner */}
+          {lock.locked && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f5f4ef', border: '1px solid #d9d6cb', borderRadius: 'var(--radius-md)', padding: '11px 14px', marginBottom: 16, fontSize: 12.5, color: '#7a7768' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              These marks are <strong style={{ color: '#5c5a4f' }}>locked</strong> — editable only within 10 minutes of first entry. Ask the office to change them.
+            </div>
+          )}
+          {lock.editable && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--gold-light)', border: '1px solid rgba(201,162,39,0.3)', borderRadius: 'var(--radius-md)', padding: '11px 14px', marginBottom: 16, fontSize: 12.5, color: 'var(--gold-dark)' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <strong>{fmtCountdown(lock.msRemaining)}</strong> left to edit — after that these marks lock (office edits only).
+            </div>
+          )}
+
           {/* Live summary */}
           {students.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
@@ -584,7 +617,7 @@ export default function ExamMarksEntry() {
           )}
 
           {/* Student rows */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20, pointerEvents: lock.locked ? 'none' : 'auto', opacity: lock.locked ? 0.55 : 1 }}>
             {students.map((s, i) => (
               <div key={i} style={{ background: s.isAbsent ? 'var(--crimson-light)' : 'var(--white)', borderRadius: 'var(--radius-md)', border: `1px solid ${s.isAbsent ? 'rgba(139,26,26,0.15)' : 'var(--gray-100)'}`, padding: '12px 14px', transition: 'all 0.15s' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: s.isAbsent ? 0 : 8 }}>
@@ -641,9 +674,9 @@ export default function ExamMarksEntry() {
           {/* Sticky progress-save — always reachable mid-list on a phone. */}
           {students.length > 0 && (
             <div style={{ position: 'sticky', bottom: 12, zIndex: 5, margin: '12px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button onClick={handleSaveProgress} disabled={progressSaving || !dirty}
-                style={{ flex: 1, padding: '12px', background: 'white', color: (!dirty || progressSaving) ? 'var(--gray-400)' : 'var(--green)', border: `1.5px solid ${(!dirty || progressSaving) ? 'var(--gray-200)' : 'var(--green)'}`, borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 600, cursor: (!dirty || progressSaving) ? 'default' : 'pointer', boxShadow: '0 4px 14px rgba(26,74,46,0.12)' }}>
-                {progressSaving ? 'Saving…' : dirty ? 'Save progress' : progressMsg || 'Save progress'}
+              <button onClick={handleSaveProgress} disabled={progressSaving || !dirty || lock.locked}
+                style={{ flex: 1, padding: '12px', background: 'white', color: (!dirty || progressSaving || lock.locked) ? 'var(--gray-400)' : 'var(--green)', border: `1.5px solid ${(!dirty || progressSaving || lock.locked) ? 'var(--gray-200)' : 'var(--green)'}`, borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 600, cursor: (!dirty || progressSaving || lock.locked) ? 'default' : 'pointer', boxShadow: '0 4px 14px rgba(26,74,46,0.12)' }}>
+                {lock.locked ? 'Locked' : progressSaving ? 'Saving…' : dirty ? 'Save progress' : progressMsg || 'Save progress'}
               </button>
             </div>
           )}
@@ -651,9 +684,9 @@ export default function ExamMarksEntry() {
             <p style={{ fontSize: 12, color: 'var(--green-dark)', textAlign: 'center', margin: '0 0 10px' }}>✓ {progressMsg}</p>
           )}
 
-          <button onClick={() => setShowReview(true)} disabled={saving || students.length === 0}
-            style={{ width: '100%', padding: '15px', background: students.length === 0 ? 'var(--gray-200)' : 'var(--green)', color: students.length === 0 ? 'var(--gray-400)' : 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: 15, fontWeight: 600, cursor: students.length === 0 ? 'not-allowed' : 'pointer', boxShadow: students.length === 0 ? 'none' : '0 4px 14px rgba(26,74,46,0.25)' }}>
-            Review & Save ({students.length} students)
+          <button onClick={() => setShowReview(true)} disabled={saving || students.length === 0 || lock.locked}
+            style={{ width: '100%', padding: '15px', background: (students.length === 0 || lock.locked) ? 'var(--gray-200)' : 'var(--green)', color: (students.length === 0 || lock.locked) ? 'var(--gray-400)' : 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: 15, fontWeight: 600, cursor: (students.length === 0 || lock.locked) ? 'not-allowed' : 'pointer', boxShadow: (students.length === 0 || lock.locked) ? 'none' : '0 4px 14px rgba(26,74,46,0.25)' }}>
+            {lock.locked ? 'Locked — 10-minute edit window passed' : `Review & Save (${students.length} students)`}
           </button>
         </>
       )}

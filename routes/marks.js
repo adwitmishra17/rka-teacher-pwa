@@ -33,12 +33,21 @@ router.get('/marks', requireAuth, async (req, res) => {
 
   const { data, error } = await supabase
     .from('exam_marks')
-    .select('marks_obtained, theory_obtained, practical_obtained, is_absent, remarks, students(admission_no)')
+    .select('marks_obtained, theory_obtained, practical_obtained, is_absent, remarks, entered_at, students(admission_no)')
     .eq('paper_id', paperId)
 
   if (error) return res.status(500).json({ error: error.message })
 
+  // First-entry timestamp for the paper (earliest entered_at) drives the
+  // 10-minute edit window — the sheet locks 10 min after marks were first
+  // entered, just like the lesson log. Null when no marks yet (fresh entry).
+  const firstEnteredAt = (data ?? []).reduce(
+    (min, m) => (m.entered_at && (min == null || m.entered_at < min) ? m.entered_at : min),
+    null,
+  )
+
   res.json({
+    firstEnteredAt,
     marks: data.map(m => ({
       admissionNo: m.students?.admission_no,
       marksObtained: m.marks_obtained,
@@ -72,6 +81,24 @@ router.post('/marks', requireAuth, async (req, res) => {
     paper = await assertPaperOwner(paperId, email)
   } catch (e) {
     return res.status(e.status || 500).json({ error: e.message })
+  }
+
+  // 10-minute edit window (per paper, like the lesson log): once marks were
+  // first entered, the sheet is editable for 10 min, then locked (office edits
+  // only). Server-enforced so it can't be bypassed. Fresh sheets (no marks) pass.
+  const EDIT_WINDOW_MS = 10 * 60 * 1000
+  const { data: firstRow } = await supabase
+    .from('exam_marks')
+    .select('entered_at')
+    .eq('paper_id', paperId)
+    .order('entered_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (firstRow?.entered_at && Date.now() - new Date(firstRow.entered_at).getTime() > EDIT_WINDOW_MS) {
+    return res.status(423).json({
+      code: 'MARKS_LOCKED',
+      error: 'These marks are locked — they can be edited only within 10 minutes of first entry. Ask the office to change them.',
+    })
   }
 
   // Resolve admission_nos → student UUIDs in one query
@@ -145,12 +172,14 @@ router.post('/marks', requireAuth, async (req, res) => {
       remarks: m.remarks ?? null,
       source: 'teacher_pwa',
       entered_by: enteredBy,
-      entered_at: now,
+      updated_at: now,
     }
 
+    // entered_at is the FIRST-entry timestamp — set on insert, preserved on
+    // update — so the 10-minute window measures from entry, not last edit.
     const { error } = existing
       ? await supabase.from('exam_marks').update(payload).eq('id', existing.id)
-      : await supabase.from('exam_marks').insert(payload)
+      : await supabase.from('exam_marks').insert({ ...payload, entered_at: now })
 
     if (error) errors.push(`${m.admissionNo}: ${error.message}`)
     else saved++
