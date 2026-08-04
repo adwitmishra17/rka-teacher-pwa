@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
+import { api } from '../lib/api'
 import { useAuth } from '../App'
 import { getTeacherClasses } from '../utils/teacherClasses'
 
@@ -62,18 +63,18 @@ export default function EnterMarks() {
       try {
         const branchCode = selectedTest.branchCode || teacher?.branchCodes?.[0] || 'MAIN'
 
-        // 1. Load roster — class + branch, both active and withdrawn
-        const rosterSnap = await getDocs(query(
-          collection(db, 'students'),
-          where('className', '==', selectedTest.className),
-          where('branchCode', '==', branchCode),
-        ))
+        // 1. Load roster — LIVE from Supabase (same source & endpoint as Exam
+        //    Marks), so the roster is never stale. The server returns only
+        //    active, regular students for (class, branch); we key by rollNumber
+        //    to merge with the Firestore testMarks below. This replaced the
+        //    Firestore students-mirror read, which could lag on bulk re-rolls
+        //    (blank-roll students silently dropped from the roster).
+        const { students: roster } = await api.getStudents(selectedTest.className, branchCode)
         const rosterByRoll = new Map()   // rollNumber (canonical string) → { studentId, fullName, isActive }
-        rosterSnap.forEach(d => {
-          const s = d.data()
-          const key = String(s.rollNumber || '').trim()
-          if (key) rosterByRoll.set(key, { studentId: d.id, fullName: s.fullName || '', isActive: s.isActive !== false })
-        })
+        for (const s of (roster || [])) {
+          const key = String(s.roll_number || '').trim()
+          if (key) rosterByRoll.set(key, { studentId: s.id, fullName: s.full_name || '', isActive: true })
+        }
 
         // 2. Load existing testMarks for this test
         const marksSnap = await getDocs(query(
