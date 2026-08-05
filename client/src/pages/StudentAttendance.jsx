@@ -334,7 +334,7 @@ export default function StudentAttendance() {
                     {s.fullName}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 4 }}>
+                <div style={{ display: 'flex', gap: 6 }}>
                   <BtnLabel label="P" color="#1a4a2e" active={currentBtn === 'present'} onClick={() => mark(s, 'present')} />
                   <BtnLabel label="L" color="#c9a227" active={currentBtn === 'late'}    onClick={() => mark(s, 'late')} />
                   <BtnLabel label="A" color="#8b1a1a" active={currentBtn === 'absent'}  onClick={() => mark(s, 'absent')} />
@@ -346,12 +346,16 @@ export default function StudentAttendance() {
         </ul>
       )}
 
-      {/* Sticky save bar — appears only when there are unsaved changes. */}
+      {/* Sticky save bar — appears only when there are unsaved changes.
+          MUST float ABOVE the app's bottom nav (fixed bottom:0, zIndex:50,
+          ~72px tall) — at bottom:0 with the same z-index the nav painted
+          over it, so teachers never saw a Save button and marks were lost. */}
       {(dirtyCount > 0 || savedFlash) && (
         <div style={{
-          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
-          background: 'rgba(250,249,245,0.96)', borderTop: '1px solid #e8e6dc',
-          padding: '10px 16px calc(10px + env(safe-area-inset-bottom))',
+          position: 'fixed', bottom: 'calc(72px + var(--safe-bottom))', left: 0, right: 0, zIndex: 60,
+          background: 'rgba(250,249,245,0.98)', borderTop: '1px solid #e8e6dc',
+          boxShadow: '0 -4px 16px rgba(0,0,0,0.08)',
+          padding: '10px 16px',
         }}>
           <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', gap: 8, alignItems: 'center' }}>
             {savedFlash && dirtyCount === 0 ? (
@@ -385,11 +389,11 @@ export default function StudentAttendance() {
 function BtnLabel({ label, color, active, faded, onClick }) {
   return (
     <button onClick={onClick} disabled={faded} style={{
-      width: 30, height: 30, borderRadius: 5, border: '1.5px solid',
+      width: 38, height: 38, borderRadius: 7, border: '1.5px solid',
       borderColor: active ? color : '#d9d6cb',
       background: active ? color : '#fff',
       color: active ? '#fff' : color,
-      fontSize: 13, fontWeight: 700,
+      fontSize: 15, fontWeight: 700,
       cursor: faded ? 'default' : 'pointer',
       opacity: faded ? 0.25 : 1,
       transition: 'all 0.12s',
@@ -407,7 +411,8 @@ function Chip({ label, count, color }) {
   )
 }
 
-const containerStyle = { maxWidth: 600, margin: '0 auto', padding: '16px 16px 80px' }
+// Bottom padding clears the floating save bar (which sits above the 72px nav).
+const containerStyle = { maxWidth: 600, margin: '0 auto', padding: '16px 16px 110px' }
 const backLinkStyle = { display: 'inline-block', fontSize: 13, color: '#1a4a2e', textDecoration: 'none', marginBottom: 12 }
 const titleStyle = { fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 600, color: '#1a4a2e', margin: '0 0 4px' }
 const dateBarStyle = { display: 'flex', gap: 8, marginBottom: 12, overflowX: 'auto' }
