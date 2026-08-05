@@ -23,6 +23,7 @@ import ExamGradesEntry from './pages/ExamGradesEntry'
 import HpcEntry from './pages/HpcEntry'
 import Layout from './components/Layout'
 import ImpersonationBanner, { setImpersonationState, clearImpersonationState } from './components/ImpersonationBanner'
+import InstallPrompt from './components/InstallPrompt.jsx'
 import { startVersionWatcher, reloadForUpdate } from './lib/versionCheck'
 
 export const AuthContext = createContext(null)
@@ -128,6 +129,9 @@ export default function App() {
     <AuthContext.Provider value={{ user, teacher }}>
       <ImpersonationBanner />
       <VersionBanner />
+      {/* Chrome/Android "add to home screen" offer — self-hides when already
+          installed, when dismissed (30 days), or where unsupported. */}
+      {user && <InstallPrompt appName="Teacher PWA" />}
       <BrowserRouter>
         <ErrorBoundary>
         <Routes>
