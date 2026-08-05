@@ -11,6 +11,7 @@ import marksRouter from './routes/marks.js'
 import gradesRouter from './routes/grades.js'
 import hpcRouter from './routes/hpc.js'
 import hikRouter from './routes/hik.js'
+import { requireAuth, requireStaff } from './middleware/auth.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PORT = process.env.PORT || 3001
@@ -51,6 +52,15 @@ app.use('/api', (_req, res, next) => {
   res.set('Cache-Control', 'no-store')
   next()
 })
+
+// SECURITY GATE for the whole API surface: verify the Firebase token AND that
+// the caller is real staff (active teacher or admin). Without the staff check,
+// a valid token from a parent-app session or a self-signup account could read
+// any class roster and student PII — every /api route trusted "token valid"
+// alone. Individual routes keep their own ownership checks (assertPaperOwner
+// etc.); this is the outer membership boundary. The per-route requireAuth still
+// runs and is harmless (token verification is local + cached).
+app.use('/api', requireAuth, requireStaff)
 
 app.use('/api', subjectsRouter)
 app.use('/api', studentsRouter)
