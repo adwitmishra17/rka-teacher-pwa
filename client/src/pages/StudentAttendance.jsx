@@ -58,6 +58,8 @@ export default function StudentAttendance() {
   const branchCode = assignment?.branchCode || null
 
   const [selectedDate, setSelectedDate] = useState(todayIST())
+  const [offDays, setOffDays] = useState({})   // { 'YYYY-MM-DD': label } for this class's scope
+  const [flags, setFlags] = useState({})       // { studentId: streak } — 3+ consecutive absences
   const [students, setStudents] = useState([])
   const [attendance, setAttendance] = useState({})
   const [loading, setLoading] = useState(true)
@@ -124,6 +126,48 @@ export default function StudentAttendance() {
   }
   useEffect(() => { load() /* eslint-disable-next-line */ }, [classTeacherOf, branchCode, selectedDate])
 
+  // Non-working days for this class's scope (Sundays are always off separately).
+  // Read from Firestore nonWorkingDays (authored in the Tracker admin).
+  useEffect(() => {
+    if (!classTeacherOf || !branchCode) return
+    let cancelled = false
+    const days = lastSevenDays()
+    const minDate = days.reduce((a, b) => (a < b ? a : b))
+    ;(async () => {
+      try {
+        const snap = await getDocs(query(collection(db, 'nonWorkingDays'), where('date', '>=', minDate)))
+        if (cancelled) return
+        const m = {}
+        snap.forEach((d) => {
+          const x = d.data()
+          const branchOk = !x.branchCode || x.branchCode === branchCode
+          const classOk = !x.className || x.className === classTeacherOf
+          if (branchOk && classOk) m[x.date] = x.label || 'Holiday'
+        })
+        setOffDays(m)
+      } catch (e) { /* missing index / rules — non-fatal, Sundays still block */ }
+    })()
+    return () => { cancelled = true }
+  }, [classTeacherOf, branchCode])
+
+  // Consecutive-absence flags for this class (same SMS RPC as the At-risk list).
+  useEffect(() => {
+    if (!classTeacherOf || !branchCode) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const token = await (await import('../firebase/config')).auth.currentUser.getIdToken()
+        const qs = new URLSearchParams({ className: classTeacherOf, branchCode })
+        const r = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? '/api'}/attendance-flags?${qs}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const d = await r.json()
+        if (!cancelled && r.ok) setFlags(d.flags || {})
+      } catch (e) { /* non-fatal */ }
+    })()
+    return () => { cancelled = true }
+  }, [classTeacherOf, branchCode])
+
   function actor() {
     return {
       performedBy: teacher?.id || user?.uid || 'unknown',
@@ -134,6 +178,7 @@ export default function StudentAttendance() {
 
   // Tap = LOCAL change only. Nothing touches Firestore until Save.
   function mark(student, target) {
+    if (isSunday(selectedDate) || offDays[selectedDate]) return   // off-day: no marking
     if (!isWithinTeacherEditWindow(selectedDate)) {
       alert('This date is outside your 7-day edit window. Contact admin to make changes.')
       return
@@ -178,6 +223,7 @@ export default function StudentAttendance() {
   // Commit every pending change in one go: writes + audit rows per student.
   async function saveAll() {
     if (dirtyCount === 0 || savingAll) return
+    if (isSunday(selectedDate) || offDays[selectedDate]) return   // off-day: never write
     setSavingAll(true)
     const entries = Object.entries(dirty)
     const failures = []
@@ -255,6 +301,7 @@ export default function StudentAttendance() {
   const lateCount = students.filter(s => attendance[s.id]?.status === 'present' && attendance[s.id]?.isLate).length
   const absentCount = students.filter(s => attendance[s.id]?.status === 'absent').length
   const unmarkedCount = students.length - presentCount - lateCount - absentCount
+  const off = isSunday(selectedDate) || !!offDays[selectedDate]   // off-day: marking disabled
 
   return (
     <div style={containerStyle}>
@@ -288,11 +335,13 @@ export default function StudentAttendance() {
         </div>
       </div>
 
-      {isSunday(selectedDate) && (
+      {(isSunday(selectedDate) || offDays[selectedDate]) && (
         <div style={infoBoxStyle}>
-          {selectedDate === todayIST()
-            ? 'Today is Sunday — no attendance to mark.'
-            : 'This was a Sunday — typically no attendance.'}
+          {offDays[selectedDate]
+            ? `Non-working day — ${offDays[selectedDate]}. Attendance can’t be marked.`
+            : selectedDate === todayIST()
+              ? 'Today is Sunday — no attendance to mark.'
+              : 'This was a Sunday — no attendance.'}
         </div>
       )}
 
@@ -333,12 +382,17 @@ export default function StudentAttendance() {
                   <div style={{ fontSize: 13, fontWeight: 500, color: '#1f2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {s.fullName}
                   </div>
+                  {flags[s.id] >= 3 && (
+                    <span style={{ display: 'inline-block', marginTop: 2, fontSize: 10, fontWeight: 700, color: '#8b1a1a', background: '#fdecec', border: '1px solid #f5c7c7', borderRadius: 999, padding: '1px 7px' }}>
+                      ⚠ {flags[s.id]} days absent
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <BtnLabel label="P" color="#1a4a2e" active={currentBtn === 'present'} onClick={() => mark(s, 'present')} />
-                  <BtnLabel label="L" color="#c9a227" active={currentBtn === 'late'}    onClick={() => mark(s, 'late')} />
-                  <BtnLabel label="A" color="#8b1a1a" active={currentBtn === 'absent'}  onClick={() => mark(s, 'absent')} />
-                  <BtnLabel label="✕" color="#999"    active={false} faded={currentBtn === 'none'} onClick={() => mark(s, 'unmark')} />
+                  <BtnLabel label="P" color="#1a4a2e" active={currentBtn === 'present'} disabled={off} onClick={() => mark(s, 'present')} />
+                  <BtnLabel label="L" color="#c9a227" active={currentBtn === 'late'}    disabled={off} onClick={() => mark(s, 'late')} />
+                  <BtnLabel label="A" color="#8b1a1a" active={currentBtn === 'absent'}  disabled={off} onClick={() => mark(s, 'absent')} />
+                  <BtnLabel label="✕" color="#999"    active={false} disabled={off} faded={currentBtn === 'none'} onClick={() => mark(s, 'unmark')} />
                 </div>
               </li>
             )
@@ -386,16 +440,17 @@ export default function StudentAttendance() {
   )
 }
 
-function BtnLabel({ label, color, active, faded, onClick }) {
+function BtnLabel({ label, color, active, faded, disabled, onClick }) {
+  const dis = faded || disabled
   return (
-    <button onClick={onClick} disabled={faded} style={{
+    <button onClick={onClick} disabled={dis} style={{
       width: 38, height: 38, borderRadius: 7, border: '1.5px solid',
       borderColor: active ? color : '#d9d6cb',
       background: active ? color : '#fff',
       color: active ? '#fff' : color,
       fontSize: 15, fontWeight: 700,
-      cursor: faded ? 'default' : 'pointer',
-      opacity: faded ? 0.25 : 1,
+      cursor: dis ? 'default' : 'pointer',
+      opacity: disabled ? 0.4 : faded ? 0.25 : 1,
       transition: 'all 0.12s',
     }}>{label}</button>
   )

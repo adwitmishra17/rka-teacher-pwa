@@ -64,4 +64,31 @@ router.get('/students', requireAuth, async (req, res) => {
   res.json({ students, scopedToOptional, subject: scopedToOptional ? subject : null })
 })
 
+// GET /api/attendance-flags?className=&branchCode=
+// Students in this class currently on a run of 3+ consecutive school-day
+// absences (excludes Sundays + non-working days; strict). Returns a map of
+// studentId → streak. Uses the same SMS RPC as the SMS "At-risk" list, so the
+// teacher and office see identical flags. The service-role key makes the RPC
+// trust the passed branch/class (it pins JWT-based admins server-side instead).
+router.get('/attendance-flags', requireAuth, async (req, res) => {
+  const { className, branchCode } = req.query
+  if (!className || !branchCode) {
+    return res.status(400).json({ error: 'className and branchCode are required' })
+  }
+  const { data: branch, error: bErr } = await supabase
+    .from('branches').select('id').eq('code', branchCode).single()
+  if (bErr || !branch) return res.status(400).json({ error: `Branch '${branchCode}' not found` })
+
+  const { data, error } = await supabase.rpc('students_absent_streak', {
+    p_branch_id: branch.id,
+    p_class_name: className,
+    p_min_days: 3,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+
+  const flags = {}
+  for (const r of (data ?? [])) flags[r.student_id] = Number(r.streak)
+  res.json({ flags })
+})
+
 export default router
