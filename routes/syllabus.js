@@ -47,13 +47,46 @@ router.get('/my-syllabus', requireAuth, async (req, res) => {
       if (seen.has(k)) continue
       seen.add(k); pairs.push({ className: r.class_name, subject: r.subject_name })
     }
+    // The Tracker's subject vocabulary differs from exam_subjects: the office
+    // uploads "English Grammar"/"English Literature" while the teacher is
+    // assigned "English"; Class 9/10 science teachers are assigned
+    // Biology/Chemistry/Physics but the upload is one "Science" PDF; and
+    // Nursery–8 publish a single class-wide "Complete Syllabus". An exact
+    // doc-id lookup misses all of those and the teacher wrongly sees
+    // "Not uploaded". So: fetch each class's docs once and match by
+    // normalized name, name-family prefix, component alias, then class-wide.
+    const norm = (s) => sanitize(s).toLowerCase()
+    const COMPONENT_ALIAS = { biology: 'science', chemistry: 'science', physics: 'science' }
     const db = getAdminFirestore()
-    const items = []
-    for (const p of pairs) {
-      const snap = await db.collection('syllabusFiles').doc(fileKey(p.className, p.subject)).get()
-      const d = snap.exists ? snap.data() : null
-      items.push({ className: p.className, subject: p.subject, pdfUrl: d?.pdfUrl || null, fileName: d?.fileName || null })
+    const docsByClass = new Map()
+    for (const cls of [...new Set(pairs.map((p) => p.className))]) {
+      const snap = await db.collection('syllabusFiles').where('className', '==', cls).get()
+      docsByClass.set(cls, snap.docs.map((d) => d.data()).filter((d) => d && d.pdfUrl))
     }
+    const items = pairs.map((p) => {
+      const docs = docsByClass.get(p.className) || []
+      const sn = norm(p.subject)
+      const exact = docs.find((d) => norm(d.subject) === sn)
+      let matches = exact ? [exact] : docs.filter((d) => {
+        const dn = norm(d.subject)
+        return dn.startsWith(sn + '_') || sn.startsWith(dn + '_')       // English ↔ English_Grammar
+      })
+      if (!matches.length && COMPONENT_ALIAS[sn]) {
+        matches = docs.filter((d) => norm(d.subject) === COMPONENT_ALIAS[sn])   // Physics → Science
+      }
+      if (!matches.length) {
+        matches = docs.filter((d) => norm(d.subject) === 'complete_syllabus')   // class-wide PDF covers all
+      }
+      const first = matches[0] || null
+      return {
+        className: p.className, subject: p.subject,
+        pdfUrl: first?.pdfUrl || null, fileName: first?.fileName || null,
+        // exact-owned docs can be replaced/removed under this subject name;
+        // family/class-wide coverage is view-only for the teacher.
+        exact: Boolean(exact),
+        files: matches.map((d) => ({ subject: d.subject, pdfUrl: d.pdfUrl, fileName: d.fileName || null })),
+      }
+    })
     res.json({ subjects: items })
   } catch (e) {
     console.error('GET /api/my-syllabus', e.message)

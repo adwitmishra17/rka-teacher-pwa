@@ -84,8 +84,20 @@ export default function SyllabusPdf() {
               </button>
               {row.pdfUrl && !busy && (
                 <>
-                  <a href={row.pdfUrl} target="_blank" rel="noreferrer" style={{ padding: '8px 14px', background: '#fff', color: 'var(--green,#1a4a2e)', border: '1px solid #cfe0d6', borderRadius: 9, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>View</a>
-                  <button onClick={() => onRemove(row)} style={{ padding: '8px 14px', background: '#fff', color: '#8b1a1a', border: '1px solid #f0d5d5', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Remove</button>
+                  {/* One PDF can cover several subjects (office uploads: "English
+                      Grammar"+"English Literature" for English; one "Science" for
+                      Phy/Chem/Bio; a class-wide "Complete Syllabus" for Nursery–8)
+                      — link every covering file. */}
+                  {(row.files?.length ? row.files : [{ subject: row.subject, pdfUrl: row.pdfUrl }]).map((f) => (
+                    <a key={f.pdfUrl} href={f.pdfUrl} target="_blank" rel="noreferrer" style={{ padding: '8px 14px', background: '#fff', color: 'var(--green,#1a4a2e)', border: '1px solid #cfe0d6', borderRadius: 9, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+                      {(row.files?.length > 1 || (row.files?.length === 1 && row.files[0].subject !== row.subject)) ? `View · ${f.subject}` : 'View'}
+                    </a>
+                  ))}
+                  {/* Only a PDF uploaded under this exact subject can be removed
+                      here — office/family uploads are managed in the Tracker. */}
+                  {row.exact && (
+                    <button onClick={() => onRemove(row)} style={{ padding: '8px 14px', background: '#fff', color: '#8b1a1a', border: '1px solid #f0d5d5', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Remove</button>
+                  )}
                 </>
               )}
             </div>
