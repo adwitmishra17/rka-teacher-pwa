@@ -33,7 +33,12 @@ router.get('/students', requireAuth, async (req, res) => {
     .from('students')
     .select('id, full_name, admission_no, roll_number, class_name, section, father_name, photo_key, optional_subject')
     .eq('class_name', className)
-    .eq('branch_id', branch.id)
+    // Cross-branch sharing (SMS migration 119/120): a student appears on the
+    // roster of their home branch AND every branch in shared_branch_ids —
+    // e.g. ALL CITY Class 9 + the CITY Class 10-C section are co-administered
+    // from MAIN, so MAIN teachers must see them. A plain branch_id filter
+    // hid them from every teacher-facing roster.
+    .or(`branch_id.eq.${branch.id},shared_branch_ids.cs.{${branch.id}}`)
     .eq('is_active', true)
     // Non-regular students (attachments / own reduced-fee) exist for board
     // records only — they never attend, so they must not appear on any
