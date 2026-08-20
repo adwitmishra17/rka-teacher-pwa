@@ -16,7 +16,7 @@ const HUB_ITEMS = [
   {
     id: 'attendance',
     title: 'My attendance',
-    subtitle: 'Today + last 30 days',
+    subtitle: 'Arrival & leave times · past 3 months',
     to: '/hrms/attendance',
     enabled: true,
     icon: (
