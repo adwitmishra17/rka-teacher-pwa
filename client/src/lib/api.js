@@ -35,6 +35,24 @@ export const api = {
   getMySubjects: () =>
     apiFetch('/my-subjects'),
 
+  // --- Syllabus PDFs (own class+subjects only) ---
+  getMySyllabus: () => apiFetch('/my-syllabus'),
+  deleteSyllabus: (className, subject) =>
+    apiFetch(`/syllabus?className=${encodeURIComponent(className)}&subject=${encodeURIComponent(subject)}`, { method: 'DELETE' }),
+  uploadSyllabus: async (className, subject, file) => {
+    if (!auth.currentUser) throw new Error('Not authenticated')
+    const token = await auth.currentUser.getIdToken()
+    const fd = new FormData()
+    fd.append('className', className)
+    fd.append('subject', subject)
+    fd.append('pdf', file)
+    // No Content-Type — the browser sets the multipart boundary itself.
+    const res = await fetch(BASE + '/syllabus', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw Object.assign(new Error(data.error ?? `HTTP ${res.status}`), { status: res.status, data })
+    return data
+  },
+
   // branchId is required so terms resolve to the caller's branch — exam_terms is
   // unique per (branch, session, short_code), so each branch has its own UUIDs.
   getTerms: (sessionCode, branchId) => {

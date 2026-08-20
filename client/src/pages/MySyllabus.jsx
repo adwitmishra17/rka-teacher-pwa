@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../App'
@@ -110,9 +111,15 @@ export default function MySyllabus() {
 
   return (
     <div style={{ padding:'20px' }}>
-      <div className="fade-up" style={{ marginBottom:18 }}>
-        <h1 style={{ fontFamily:'var(--font-display)', fontSize:22, fontWeight:600, color:'var(--green-dark)' }}>My Syllabus</h1>
-        <p style={{ fontSize:13, color:'var(--text-muted)', marginTop:3 }}>Track completion across exam periods</p>
+      <div className="fade-up" style={{ marginBottom:18, display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12 }}>
+        <div>
+          <h1 style={{ fontFamily:'var(--font-display)', fontSize:22, fontWeight:600, color:'var(--green-dark)' }}>My Syllabus</h1>
+          <p style={{ fontSize:13, color:'var(--text-muted)', marginTop:3 }}>Track completion across exam periods</p>
+        </div>
+        <Link to="/syllabus-pdf" style={{ flexShrink:0, textDecoration:'none', display:'inline-flex', alignItems:'center', gap:6, background:'var(--green-light)', color:'var(--green-dark)', border:'1px solid var(--green-muted)', padding:'8px 12px', borderRadius:20, fontSize:12, fontWeight:600 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+          Syllabus PDF
+        </Link>
       </div>
 
       {/* Class tabs */}

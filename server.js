@@ -10,6 +10,7 @@ import papersRouter from './routes/papers.js'
 import marksRouter from './routes/marks.js'
 import gradesRouter from './routes/grades.js'
 import hpcRouter from './routes/hpc.js'
+import syllabusRouter from './routes/syllabus.js'
 import hikRouter from './routes/hik.js'
 import { requireAuth, requireStaff } from './middleware/auth.js'
 
@@ -68,6 +69,7 @@ app.use('/api', papersRouter)
 app.use('/api', marksRouter)
 app.use('/api', gradesRouter)
 app.use('/api', hpcRouter)
+app.use('/api', syllabusRouter)
 
 // Health check (Hostinger / load balancer ping). `build` doubles as a deploy
 // marker so a new release can be confirmed live without an authenticated call.

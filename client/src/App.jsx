@@ -8,6 +8,7 @@ import Home from './pages/Home'
 import LogLesson from './pages/LogLesson'
 import Homework from './pages/Homework'
 import MySyllabus from './pages/MySyllabus'
+import SyllabusPdf from './pages/SyllabusPdf'
 import MyMarks from './pages/MyMarks'
 import LessonPlan from './pages/LessonPlan'
 import StudentAnalytics from './pages/StudentAnalytics'
@@ -141,6 +142,7 @@ export default function App() {
             <Route path="log-lesson" element={<LogLesson />} />
             <Route path="homework" element={<Homework />} />
             <Route path="my-syllabus" element={<MySyllabus />} />
+            <Route path="syllabus-pdf" element={<SyllabusPdf />} />
             <Route path="my-marks" element={<MyMarks />} />
             <Route path="lesson-plan" element={<LessonPlan />} />
             <Route path="student-analytics" element={<StudentAnalytics />} />
