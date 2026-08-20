@@ -33,12 +33,13 @@ router.get('/students', requireAuth, async (req, res) => {
     .from('students')
     .select('id, full_name, admission_no, roll_number, class_name, section, father_name, photo_key, optional_subject')
     .eq('class_name', className)
-    // Cross-branch sharing (SMS migration 119/120): a student appears on the
-    // roster of their home branch AND every branch in shared_branch_ids —
-    // e.g. ALL CITY Class 9 + the CITY Class 10-C section are co-administered
-    // from MAIN, so MAIN teachers must see them. A plain branch_id filter
-    // hid them from every teacher-facing roster.
-    .or(`branch_id.eq.${branch.id},shared_branch_ids.cs.{${branch.id}}`)
+    // POLICY (user, 2026-08-20): teacher rosters are HOME-BRANCH ONLY —
+    // deliberately NOT shared_branch_ids-aware. The mirrored CITY Class 9 /
+    // Class 10-C students are visible to MAIN in the SMS *admin* app, but
+    // their attendance/marks are handled by CITY teachers, so they must
+    // appear only in the CITY branch's teacher app. Do not "fix" this to
+    // an or-shared filter.
+    .eq('branch_id', branch.id)
     .eq('is_active', true)
     // Non-regular students (attachments / own reduced-fee) exist for board
     // records only — they never attend, so they must not appear on any

@@ -45,9 +45,9 @@ router.post('/hpc', requireAuth, async (req, res) => {
     .from('students')
     .select('id, full_name, admission_no, class_name, section, roll_number, father_name, mother_name, date_of_birth')
     .eq('admission_no', studentAdmissionNo)
-    // shared_branch_ids: mirrored students (CITY Class 9 / 10-C) resolve
-    // under the co-administering branch too, matching the roster route.
-    .or(`branch_id.eq.${branch.id},shared_branch_ids.cs.{${branch.id}}`)
+    // POLICY: home branch only, matching the roster route — mirrored CITY
+    // students are CITY-teacher territory (see routes/students.js).
+    .eq('branch_id', branch.id)
     .eq('is_active', true)
     .single()
 
