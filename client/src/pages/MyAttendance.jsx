@@ -5,19 +5,12 @@
 //
 // Calls the Supabase Edge Function `get-my-attendance` with the current
 // user's Firebase ID token, then renders:
-//   - A "Today" card (first IN, last OUT, status pill)
-//   - A "Last 30 days" list (one row per date)
-//
-// Drop-in expectations:
-//   - Firebase Auth is initialised somewhere central (e.g. src/firebase.js)
-//     and exports `auth` (the firebase/auth instance).
-//   - Vite env var VITE_SUPABASE_FUNCTIONS_URL points at your project's
-//     Edge Functions base URL, e.g.
-//       https://<project-ref>.supabase.co/functions/v1
-//   - The accompanying MyAttendance.css is imported (already done below).
-//
-// The component does NOT include a route or nav entry — wire it into your
-// router (e.g. <Route path="/attendance" element={<MyAttendance />} />).
+//   - The employee's RESOLVED reporting time (custom → department → branch,
+//     as configured in HRMS)
+//   - A "Today" card (first IN, last OUT, status pill, late marker)
+//   - A month picker (current + previous 2 months) with one row per date,
+//     each showing arrival/leave and the day's expected time + late minutes
+//     snapshotted by HRMS (attendance_daily).
 // =========================================================================
 
 import { useEffect, useMemo, useState } from "react";
@@ -28,49 +21,69 @@ import "./MyAttendance.css";
 const FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
 
 // India is the only TZ this school operates in. We deliberately compute
-// "today" and per-day grouping in IST regardless of the device's TZ, so
-// a teacher checking from a phone set to a different TZ still sees their
-// school day correctly.
+// "today" and per-day grouping in IST regardless of the device's TZ.
 const IST_TZ = "Asia/Kolkata";
 
 const dayKeyFmt = new Intl.DateTimeFormat("en-CA", {
-  timeZone: IST_TZ,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-}); // produces "YYYY-MM-DD"
+  timeZone: IST_TZ, year: "numeric", month: "2-digit", day: "2-digit",
+}); // "YYYY-MM-DD"
 
 const timeFmt = new Intl.DateTimeFormat("en-IN", {
-  timeZone: IST_TZ,
-  hour: "numeric",
-  minute: "2-digit",
-  hour12: true,
+  timeZone: IST_TZ, hour: "numeric", minute: "2-digit", hour12: true,
 });
 
 const dayLabelFmt = new Intl.DateTimeFormat("en-IN", {
-  timeZone: IST_TZ,
-  weekday: "short",
-  day: "numeric",
-  month: "short",
+  timeZone: IST_TZ, weekday: "short", day: "numeric", month: "short",
 });
 
-function dayKey(date) {
-  return dayKeyFmt.format(date);
+const monthLabelFmt = new Intl.DateTimeFormat("en-IN", {
+  timeZone: IST_TZ, month: "short", year: "numeric",
+});
+
+function dayKey(date) { return dayKeyFmt.format(date); }
+function todayKey() { return dayKey(new Date()); }
+
+// "07:45:00" (HRMS time column) → "7:45 am"
+function fmtTimeStr(t) {
+  if (!t) return null;
+  const [h, m] = String(t).split(":").map(Number);
+  if (Number.isNaN(h)) return null;
+  const ampm = h >= 12 ? "pm" : "am";
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return `${hr}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-function todayKey() {
-  return dayKey(new Date());
+// The three selectable months: current + previous two, newest first.
+function monthChoices() {
+  const [y, m] = todayKey().split("-").map(Number);
+  const out = [];
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(Date.UTC(y, m - 1 - i, 1));
+    const yy = d.getUTCFullYear();
+    const mm = d.getUTCMonth() + 1;
+    out.push({
+      key: `${yy}-${String(mm).padStart(2, "0")}`,
+      label: monthLabelFmt.format(new Date(yy, mm - 1, 15)),
+    });
+  }
+  return out;
 }
 
-/**
- * Group raw events by IST day. Returns Map<dayKey, Event[]> sorted ascending
- * within each day.
- */
+// IST range for a "YYYY-MM" month; the current month is capped at today.
+function monthRange(monthKey) {
+  const [y, m] = monthKey.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const from = `${monthKey}-01T00:00:00+05:30`;
+  const today = todayKey();
+  const endDay = today.startsWith(monthKey) ? today : `${monthKey}-${String(lastDay).padStart(2, "0")}`;
+  const to = `${endDay}T23:59:59+05:30`;
+  return { from, to };
+}
+
 function groupEventsByDay(events) {
   const map = new Map();
   for (const evt of events) {
-    const d = new Date(evt.event_time);
-    const k = dayKey(d);
+    const k = dayKey(new Date(evt.event_time));
     if (!map.has(k)) map.set(k, []);
     map.get(k).push(evt);
   }
@@ -80,11 +93,6 @@ function groupEventsByDay(events) {
   return map;
 }
 
-/**
- * Build an ordered list of dayKeys covering the requested window
- * (oldest -> newest). We fill in days that have zero events so the list
- * shows continuity instead of mysterious gaps.
- */
 function buildDayList(fromIso, toIso) {
   const days = [];
   const from = new Date(fromIso);
@@ -103,12 +111,7 @@ function summariseDay(events) {
     return { status: "no-record", inAt: null, outAt: null, count: 0 };
   }
   if (events.length === 1) {
-    return {
-      status: "single-punch",
-      inAt: events[0].event_time,
-      outAt: null,
-      count: 1,
-    };
+    return { status: "single-punch", inAt: events[0].event_time, outAt: null, count: 1 };
   }
   return {
     status: "present",
@@ -127,8 +130,6 @@ function StatusPill({ status }) {
   return <span className={`rka-pill rka-pill--${status}`}>{label}</span>;
 }
 
-// Small back-link shown at the top of every state. Users can't reach /hrms
-// from the bottom nav, so this is the only in-app way back to the hub.
 function BackToHub() {
   return (
     <Link to="/hrms" className="rka-attendance__back">
@@ -141,26 +142,28 @@ function BackToHub() {
 }
 
 export default function MyAttendance() {
+  const months = useMemo(monthChoices, []);
+  const [month, setMonth] = useState(months[0].key);
   const [state, setState] = useState({ kind: "loading" });
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
+      setState((s) => (s.kind === "ready" ? { ...s, refreshing: true } : { kind: "loading" }));
       try {
         const user = auth.currentUser;
         if (!user) {
-          // Belt-and-braces; the route should already be auth-gated.
           if (!cancelled) setState({ kind: "signed-out" });
           return;
         }
 
-        // Helper: call get-my-attendance with a fresh token. Used twice for
-        // the retry path so we never call with a stale token after a "Failed
-        // to fetch" — which is often a CORS-swallowed 401 from token expiry.
+        const { from, to } = monthRange(month);
+        const qs = `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+
         async function callOnce() {
           const token = await user.getIdToken(/* forceRefresh */ true);
-          return fetch(`${FUNCTIONS_URL}/get-my-attendance`, {
+          return fetch(`${FUNCTIONS_URL}/get-my-attendance${qs}`, {
             method: "GET",
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -170,9 +173,6 @@ export default function MyAttendance() {
         try {
           res = await callOnce();
         } catch (err) {
-          // TypeError "Failed to fetch" = network/CORS error. Wait briefly
-          // and try once more in case of transient failure. If it still
-          // fails, propagate to the outer catch.
           console.warn('get-my-attendance first attempt failed, retrying:', err?.message);
           await new Promise(r => setTimeout(r, 600));
           res = await callOnce();
@@ -182,16 +182,11 @@ export default function MyAttendance() {
 
         if (!res.ok) {
           if (res.status === 404 && body.error === "no_linked_staff") {
-            if (!cancelled) {
-              setState({ kind: "not-linked", email: body.email });
-            }
+            if (!cancelled) setState({ kind: "not-linked", email: body.email });
             return;
           }
           if (!cancelled) {
-            setState({
-              kind: "error",
-              message: body.message || `Request failed (${res.status}).`,
-            });
+            setState({ kind: "error", message: body.message || `Request failed (${res.status}).` });
           }
           return;
         }
@@ -202,23 +197,15 @@ export default function MyAttendance() {
         if (!cancelled) {
           setState({
             kind: "error",
-            message:
-              err?.message ??
-              "Couldn't reach the server. Check your connection and try again.",
+            message: err?.message ?? "Couldn't reach the server. Check your connection and try again.",
           });
         }
       }
     }
 
-    // If Firebase is still hydrating the user on first paint, wait one tick.
     const unsub = auth.onAuthStateChanged(() => load());
-    return () => {
-      cancelled = true;
-      unsub();
-    };
-  }, []);
-
-  // ---------- render branches ------------------------------------------
+    return () => { cancelled = true; unsub(); };
+  }, [month]);
 
   if (state.kind === "loading") {
     return (
@@ -239,10 +226,8 @@ export default function MyAttendance() {
     return (
       <main className="rka-attendance">
         <BackToHub />
-        <EmptyState
-          title="Please sign in"
-          message="You need to sign in with your Google account to view attendance."
-        />
+        <EmptyState title="Please sign in"
+          message="You need to sign in with your Google account to view attendance." />
       </main>
     );
   }
@@ -251,16 +236,9 @@ export default function MyAttendance() {
     return (
       <main className="rka-attendance">
         <BackToHub />
-        <EmptyState
-          title="Account not yet linked"
-          message={
-            <>
-              Your sign-in email <strong>{state.email}</strong> isn't linked to a
-              staff record yet. Please ask the school admin to link it in the
-              HRMS, then refresh this page.
-            </>
-          }
-        />
+        <EmptyState title="Account not yet linked"
+          message={<>Your sign-in email <strong>{state.email}</strong> isn't linked to a staff record yet.
+            Please ask the school admin to link it in the HRMS, then refresh this page.</>} />
       </main>
     );
   }
@@ -269,34 +247,52 @@ export default function MyAttendance() {
     return (
       <main className="rka-attendance">
         <BackToHub />
-        <EmptyState
-          title="Couldn't load attendance"
-          message={state.message}
-          tone="error"
-        />
+        <EmptyState title="Couldn't load attendance" message={state.message} tone="error" />
       </main>
     );
   }
 
-  // state.kind === "ready"
-  return <AttendanceView data={state.data} />;
+  return (
+    <AttendanceView
+      data={state.data}
+      months={months}
+      month={month}
+      onMonth={setMonth}
+      refreshing={Boolean(state.refreshing)}
+    />
+  );
 }
 
-function AttendanceView({ data }) {
-  const { employee, range, events } = data;
+function AttendanceView({ data, months, month, onMonth, refreshing }) {
+  const { employee, range, events, daily, reporting } = data;
 
   const grouped = useMemo(() => groupEventsByDay(events), [events]);
-  const days = useMemo(
-    () => buildDayList(range.from, range.to),
-    [range.from, range.to],
-  );
+  const dailyByDate = useMemo(() => {
+    const m = new Map();
+    for (const d of daily ?? []) m.set(d.date, d);
+    return m;
+  }, [daily]);
+  const days = useMemo(() => buildDayList(range.from, range.to), [range.from, range.to]);
 
   const today = todayKey();
+  const isCurrentMonth = today.startsWith(month);
   const todayEvents = grouped.get(today) ?? [];
   const todaySummary = summariseDay(todayEvents);
+  const todayDaily = dailyByDate.get(today);
 
-  // Show newest first in the list.
   const reversedDays = [...days].reverse();
+
+  // Month roll-up: worked days + how many were late (per HRMS's own math).
+  const monthStats = useMemo(() => {
+    let worked = 0, late = 0;
+    for (const k of days) {
+      const evts = grouped.get(k) ?? [];
+      const d = dailyByDate.get(k);
+      if (evts.length > 0 || (d && d.in_time)) worked++;
+      if (d && Number(d.late_minutes) > 0) late++;
+    }
+    return { worked, late };
+  }, [days, grouped, dailyByDate]);
 
   return (
     <main className="rka-attendance">
@@ -306,71 +302,115 @@ function AttendanceView({ data }) {
         <h1 className="rka-attendance__name">{employee.name}</h1>
         <p className="rka-attendance__staff-id">
           Biometric ID: <span>{employee.biometric_code ?? "—"}</span>
+          {reporting?.in_time && (
+            <>
+              <br />
+              Reporting time:{" "}
+              <span>
+                {fmtTimeStr(reporting.in_time)}
+                {reporting.out_time ? ` – ${fmtTimeStr(reporting.out_time)}` : ""}
+              </span>
+              {Number(reporting.grace_minutes) > 0 && <> · grace {reporting.grace_minutes} min</>}
+            </>
+          )}
           <br />
           <small>If this isn't you, contact admin.</small>
         </p>
       </header>
 
-      <section className="rka-today" aria-labelledby="today-heading">
-        <div className="rka-today__top">
-          <h2 id="today-heading" className="rka-today__title">Today</h2>
-          <StatusPill status={todaySummary.status} />
-        </div>
-        <p className="rka-today__date">
-          {dayLabelFmt.format(new Date())}
-        </p>
-        <div className="rka-today__times">
-          <div className="rka-today__time">
-            <span className="rka-today__label">In</span>
-            <span className="rka-today__value">
-              {todaySummary.inAt ? timeFmt.format(new Date(todaySummary.inAt)) : "—"}
-            </span>
+      {isCurrentMonth && (
+        <section className="rka-today" aria-labelledby="today-heading">
+          <div className="rka-today__top">
+            <h2 id="today-heading" className="rka-today__title">Today</h2>
+            <StatusPill status={todaySummary.status} />
           </div>
-          <div className="rka-today__divider" aria-hidden="true" />
-          <div className="rka-today__time">
-            <span className="rka-today__label">Out</span>
-            <span className="rka-today__value">
-              {todaySummary.outAt ? timeFmt.format(new Date(todaySummary.outAt)) : "—"}
-            </span>
+          <p className="rka-today__date">{dayLabelFmt.format(new Date())}</p>
+          <div className="rka-today__times">
+            <div className="rka-today__time">
+              <span className="rka-today__label">In</span>
+              <span className="rka-today__value">
+                {todaySummary.inAt ? timeFmt.format(new Date(todaySummary.inAt)) : "—"}
+              </span>
+            </div>
+            <div className="rka-today__divider" aria-hidden="true" />
+            <div className="rka-today__time">
+              <span className="rka-today__label">Out</span>
+              <span className="rka-today__value">
+                {todaySummary.outAt ? timeFmt.format(new Date(todaySummary.outAt)) : "—"}
+              </span>
+            </div>
           </div>
-        </div>
-        {todaySummary.count > 2 && (
-          <p className="rka-today__extra">
-            {todaySummary.count} punches recorded today
-          </p>
-        )}
-      </section>
+          {todayDaily && Number(todayDaily.late_minutes) > 0 && (
+            <p className="rka-today__extra" style={{ color: "#8b1a1a" }}>
+              Late by {todayDaily.late_minutes} min (due {fmtTimeStr(todayDaily.expected_in_time)})
+            </p>
+          )}
+          {todaySummary.count > 2 && (
+            <p className="rka-today__extra">{todaySummary.count} punches recorded today</p>
+          )}
+        </section>
+      )}
 
       <section className="rka-history" aria-labelledby="history-heading">
-        <h2 id="history-heading" className="rka-history__title">Last 30 days</h2>
-        <ol className="rka-history__list">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+          <h2 id="history-heading" className="rka-history__title" style={{ margin: 0 }}>Arrival times</h2>
+          <div style={{ display: "flex", gap: 6 }}>
+            {months.map((m) => (
+              <button key={m.key} onClick={() => onMonth(m.key)}
+                style={{
+                  padding: "6px 12px", borderRadius: 16, fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", transition: "all .15s",
+                  border: `1px solid ${month === m.key ? "var(--green,#1a4a2e)" : "#d7dcd8"}`,
+                  background: month === m.key ? "var(--green,#1a4a2e)" : "#fff",
+                  color: month === m.key ? "#fff" : "#556",
+                }}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p style={{ fontSize: 12, color: "#667", margin: "6px 0 10px" }}>
+          {refreshing ? "Loading…" : `${monthStats.worked} day${monthStats.worked === 1 ? "" : "s"} recorded` +
+            (monthStats.late ? ` · late on ${monthStats.late}` : "")}
+        </p>
+        <ol className="rka-history__list" style={{ opacity: refreshing ? 0.5 : 1 }}>
           {reversedDays.map((k) => {
             const dayEvents = grouped.get(k) ?? [];
             const summary = summariseDay(dayEvents);
+            const d = dailyByDate.get(k);
             const isToday = k === today;
+            const late = d && Number(d.late_minutes) > 0;
             return (
-              <li
-                key={k}
-                className={`rka-day ${isToday ? "rka-day--today" : ""}`}
-              >
+              <li key={k} className={`rka-day ${isToday ? "rka-day--today" : ""}`}>
                 <div className="rka-day__date">
                   <span className="rka-day__date-main">
                     {dayLabelFmt.format(new Date(k + "T12:00:00"))}
                   </span>
                   {isToday && <span className="rka-day__today-tag">Today</span>}
+                  {d?.is_holiday && <span className="rka-day__today-tag" style={{ background: "#eef2ee", color: "#556" }}>Holiday</span>}
                 </div>
                 <div className="rka-day__times">
-                  {summary.status === "no-record" ? (
+                  {summary.status === "no-record" && !(d && d.in_time) ? (
                     <span className="rka-day__no-record">No record</span>
                   ) : (
                     <>
                       <span className="rka-day__time">
-                        {summary.inAt ? timeFmt.format(new Date(summary.inAt)) : "—"}
+                        {summary.inAt ? timeFmt.format(new Date(summary.inAt))
+                          : (d?.in_time ? fmtTimeStr(d.in_time) : "—")}
                       </span>
                       <span className="rka-day__arrow" aria-hidden="true">→</span>
                       <span className="rka-day__time">
-                        {summary.outAt ? timeFmt.format(new Date(summary.outAt)) : "—"}
+                        {summary.outAt ? timeFmt.format(new Date(summary.outAt))
+                          : (d?.out_time ? fmtTimeStr(d.out_time) : "—")}
                       </span>
+                      {late && (
+                        <span style={{
+                          marginLeft: 8, fontSize: 11, fontWeight: 700, color: "#8b1a1a",
+                          background: "#fdeaea", padding: "2px 8px", borderRadius: 10, whiteSpace: "nowrap",
+                        }}>
+                          Late {d.late_minutes}m
+                        </span>
+                      )}
                     </>
                   )}
                 </div>
@@ -382,7 +422,8 @@ function AttendanceView({ data }) {
 
       <p className="rka-attendance__footer">
         Showing {dayLabelFmt.format(new Date(range.from))} – {dayLabelFmt.format(new Date(range.to))}.
-        Records are based on biometric punches; talk to admin if anything looks wrong.
+        Records are based on biometric punches; the expected reporting time comes from HRMS.
+        Talk to admin if anything looks wrong.
       </p>
     </main>
   );
