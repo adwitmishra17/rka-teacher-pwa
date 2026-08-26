@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react'
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, Timestamp } from 'firebase/firestore'
+import React, { useState, useEffect, useMemo } from 'react'
+import { collection, getDocs, addDoc, updateDoc, setDoc, deleteDoc, doc, getDoc, query, where, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { api } from '../lib/api'
 import { useAuth } from '../App'
-import { getTeacherClasses } from '../utils/teacherClasses'
+import { getTeacherClasses, getTeacherClassSubjects } from '../utils/teacherClasses'
+import { fetchTestRegime, openWindows, monthlySlotId, subjectTested, MONTH_NAMES } from '../lib/monthlyTests'
 
 export default function EnterMarks() {
   const { teacher, user } = useAuth()
   const [tests, setTests] = useState([])
+  const [monthlyDocs, setMonthlyDocs] = useState([])          // materialized MT_* docs (any teacher)
+  const [regime, setRegime] = useState(null)                  // settings/testRegime
+  const [pairs, setPairs] = useState([])                      // my (class, subject, branch) pairs
   const [testIdsWithMarks, setTestIdsWithMarks] = useState(new Set())
   const [selectedTest, setSelectedTest] = useState(null)
   const [students, setStudents] = useState([])
@@ -35,7 +39,11 @@ export default function EnterMarks() {
 
   const [myClasses, setMyClasses] = useState([])
   useEffect(() => {
-    if (teacher || user) getTeacherClasses(teacher, user).then(setMyClasses)
+    if (teacher || user) {
+      getTeacherClasses(teacher, user).then(setMyClasses)
+      getTeacherClassSubjects(teacher, user).then(setPairs)
+      fetchTestRegime().then(setRegime)
+    }
   }, [teacher, user])
 
   useEffect(() => {
@@ -45,10 +53,16 @@ export default function EnterMarks() {
       getDocs(collection(db, 'testMarks')),
     ]).then(([testsSnap, marksSnap]) => {
       const all = testsSnap.docs.map(d => ({ id:d.id, ...d.data() }))
-      // Only show tests owned by this teacher (matched by teacherId, falling back to teacherName for legacy data)
+      // Materialized monthly-regime docs are matched by deterministic id, not
+      // ownership — the slot belongs to (class, subject), so whoever teaches
+      // it now sees it (substitutes/transfers just work).
+      setMonthlyDocs(all.filter(t => t.kind === 'monthly'))
+      // Ad-hoc (admin-scheduled) tests: owned by this teacher (teacherId
+      // match, teacherName fallback for legacy data)
       const teacherIdMatch = teacher?.id
       const teacherNameLower = (teacher?.fullName || '').toLowerCase().trim()
       const filtered = all.filter(t => {
+        if (t.kind === 'monthly') return false
         if (teacherIdMatch && t.teacherId === teacherIdMatch) return true
         if (teacherNameLower && (t.teacherName || '').toLowerCase().trim() === teacherNameLower) return true
         return false
@@ -60,6 +74,39 @@ export default function EnterMarks() {
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [teacher, myClasses])
+
+  // Monthly-regime cards: one per open month-window × my (class,subject)
+  // pairs the regime tests. Uses the materialized doc when it exists, else a
+  // synthesized virtual test that materializes on first save.
+  const monthlyCards = useMemo(() => {
+    if (!regime || pairs.length === 0) return []
+    const docsById = new Map(monthlyDocs.map(t => [t.id, t]))
+    const cards = []
+    for (const w of openWindows(regime)) {
+      for (const p of pairs) {
+        if (!subjectTested(regime, p.className, p.subject)) continue
+        const id = monthlySlotId(w.session, w.monthNo, p.className, p.subject, p.branchCode)
+        const existing = docsById.get(id)
+        const base = existing || {
+          id,
+          kind: 'monthly',
+          virtual: true,               // not yet materialized
+          testName: `Monthly Test — ${MONTH_NAMES[w.monthNo]}`,
+          className: p.className,
+          subject: p.subject,
+          branchCode: p.branchCode,
+          maxMarks: Number(regime.defaults?.maxMarks ?? 25),
+          passMarks: Number(regime.defaults?.passMarks ?? 10),
+          testDate: '',
+          monthNo: w.monthNo,
+          session: w.session,
+        }
+        const done = existing ? (existing.marksEntered || testIdsWithMarks.has(id)) : false
+        cards.push({ ...base, _status: done ? 'done' : existing ? 'started' : 'pending', _late: w.late })
+      }
+    }
+    return cards
+  }, [regime, pairs, monthlyDocs, testIdsWithMarks])
 
   // When test selected, load existing marks and students.
   // Strategy: load the live roster (students collection) AND any existing
@@ -171,18 +218,56 @@ export default function EnterMarks() {
     if (!selectedTest || students.length === 0) return
     if (lock.locked) return   // 10-minute edit window passed
 
-    // Ownership guard: only the teacher who owns this test can save marks for it
-    const teacherIdMatch = teacher?.id
-    const teacherNameLower = (teacher?.fullName || '').toLowerCase().trim()
-    const ownsTest =
-      (teacherIdMatch && selectedTest.teacherId === teacherIdMatch) ||
-      (teacherNameLower && (selectedTest.teacherName || '').toLowerCase().trim() === teacherNameLower)
-    if (!ownsTest) {
-      alert('You can only enter marks for tests you created. Please ask the teacher who created this test to enter the marks, or speak to the admin.')
-      return
+    // Ownership guard. Monthly-regime slots belong to the (class, subject)
+    // pair, not a person — any teacher who currently teaches that pair per
+    // the timetable may enter. Ad-hoc tests stay bound to their creator.
+    if (selectedTest.kind === 'monthly') {
+      const teachesPair = pairs.some(p =>
+        p.className === selectedTest.className && p.subject === selectedTest.subject)
+      if (!teachesPair) {
+        alert('This monthly test belongs to a class-subject you do not currently teach per the timetable. Ask the admin to fix your timetable if that is wrong.')
+        return
+      }
+    } else {
+      const teacherIdMatch = teacher?.id
+      const teacherNameLower = (teacher?.fullName || '').toLowerCase().trim()
+      const ownsTest =
+        (teacherIdMatch && selectedTest.teacherId === teacherIdMatch) ||
+        (teacherNameLower && (selectedTest.teacherName || '').toLowerCase().trim() === teacherNameLower)
+      if (!ownsTest) {
+        alert('You can only enter marks for tests you created. Please ask the teacher who created this test to enter the marks, or speak to the admin.')
+        return
+      }
     }
     setSaving(true)
     try {
+      // Lazy materialization: a monthly slot's tests/{MT_*} doc is created on
+      // the FIRST save (deterministic id ⇒ no duplicates). If another teacher
+      // of the same pair materialized it moments ago, skip the create — rules
+      // only let teachers update the marksEntered flag on existing docs.
+      if (selectedTest.kind === 'monthly' && selectedTest.virtual) {
+        const ref = doc(db, 'tests', selectedTest.id)
+        const snap = await getDoc(ref)
+        if (!snap.exists()) {
+          await setDoc(ref, {
+            kind: 'monthly',
+            auto: true,
+            session: selectedTest.session || '',
+            monthNo: selectedTest.monthNo || null,
+            testName: selectedTest.testName || 'Monthly Test',
+            className: selectedTest.className || '',
+            subject: selectedTest.subject || '',
+            branchCode: selectedTest.branchCode || teacher?.branchCodes?.[0] || 'MAIN',
+            maxMarks: Number(selectedTest.maxMarks || 25),
+            passMarks: Number(selectedTest.passMarks || 10),
+            testDate: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
+            teacherId: teacher?.id || '',
+            teacherName: teacher?.fullName || '',
+            marksEntered: false,
+            createdAt: Timestamp.now(),
+          })
+        }
+      }
       // Load ALL existing testMarks for this test (authoritative source)
       const existingSnap = await getDocs(query(collection(db, 'testMarks'), where('testId', '==', selectedTest.id)))
       const existingDocs = existingSnap.docs.map(d => ({ docId:d.id, ...d.data() }))
@@ -213,7 +298,7 @@ export default function EnterMarks() {
           classId: selectedTest.classId || '',
           className: selectedTest.className || '',
           subject: selectedTest.subject || '',
-          testDate: selectedTest.testDate || '',
+          testDate: selectedTest.testDate || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
           studentId: s.studentId || null,
           studentName: s.name,
           rollNumber: s.rollNumber,
@@ -235,6 +320,13 @@ export default function EnterMarks() {
       }
       await updateDoc(doc(db, 'tests', selectedTest.id), { marksEntered: true })
       if (firstEnteredMs == null) setFirstEnteredMs(Date.now())   // first entry → start the 10-min window now
+      // Keep the list fresh without a refetch: the slot's card flips to Done.
+      setTestIdsWithMarks(prev => new Set([...prev, selectedTest.id]))
+      if (selectedTest.kind === 'monthly') {
+        setMonthlyDocs(prev => prev.some(t => t.id === selectedTest.id)
+          ? prev.map(t => t.id === selectedTest.id ? { ...t, marksEntered: true } : t)
+          : [...prev, { ...selectedTest, virtual: false, marksEntered: true }])
+      }
       setSaved(true)
     } catch(e) { console.error(e) }
     setSaving(false)
@@ -348,33 +440,79 @@ export default function EnterMarks() {
           <div style={{ textAlign:'center', padding:48 }}>
             <div style={{ width:28, height:28, border:'2px solid var(--green-muted)', borderTopColor:'var(--green)', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto' }} />
           </div>
-        ) : tests.length === 0 ? (
-          <div style={{ textAlign:'center', padding:'40px 20px', background:'var(--white)', borderRadius:'var(--radius-lg)', border:'1px solid var(--gray-100)' }}>
-            <p style={{ color:'var(--text-muted)', fontSize:14 }}>No tests scheduled for your classes yet.</p>
-            <p style={{ color:'var(--text-muted)', fontSize:13, marginTop:4 }}>Tests are created by the admin.</p>
-          </div>
         ) : (
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {tests.map(t => (
-              <button key={t.id} onClick={() => setSelectedTest(t)} style={{ background:'var(--white)', border:'1px solid var(--gray-100)', borderRadius:'var(--radius-md)', padding:'14px 16px', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
-                <div>
-                  <div style={{ fontSize:14, fontWeight:600, color:'var(--text)', marginBottom:3 }}>{t.testName || 'Unnamed Test'}</div>
-                  <div style={{ fontSize:12, color:'var(--text-muted)' }}>{t.className} · {t.subject} · {t.testDate || 'No date'}</div>
+          <>
+            {/* ── Monthly tests (auto — nothing to schedule) ── */}
+            {monthlyCards.length > 0 && (
+              <div style={{ marginBottom:22 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                  <span style={{ fontSize:12, fontWeight:600, color:'var(--green-dark)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Monthly tests</span>
+                  <span style={{ fontSize:11, color:'var(--text-muted)' }}>
+                    {monthlyCards.filter(c => c._status === 'done').length}/{monthlyCards.length} done
+                  </span>
                 </div>
-                <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
-                  {(() => {
-                    const done = testIdsWithMarks.has(t.id)
-                    return (
-                      <span style={{ fontSize:11, padding:'3px 9px', borderRadius:10, background: done ? 'var(--green-light)' : 'var(--gold-light)', color: done ? 'var(--green)' : 'var(--gold-dark)', fontWeight:500 }}>
-                        {done ? 'Done' : 'Pending'}
-                      </span>
-                    )
-                  })()}
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {monthlyCards.map(c => (
+                    <button key={c.id} onClick={() => setSelectedTest(c)} style={{ background:'var(--white)', border:`1px solid ${c._status === 'done' ? 'var(--green-muted)' : 'var(--gray-100)'}`, borderRadius:'var(--radius-md)', padding:'14px 16px', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+                      <div>
+                        <div style={{ fontSize:14, fontWeight:600, color:'var(--text)', marginBottom:3 }}>
+                          {c.className} · {c.subject}
+                        </div>
+                        <div style={{ fontSize:12, color:'var(--text-muted)' }}>
+                          {c.testName}{c._late ? ' · last month (grace window)' : ''} · Max {c.maxMarks}
+                        </div>
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+                        <span style={{ fontSize:11, padding:'3px 9px', borderRadius:10,
+                          background: c._status === 'done' ? 'var(--green-light)' : c._late ? 'var(--crimson-light)' : 'var(--gold-light)',
+                          color: c._status === 'done' ? 'var(--green)' : c._late ? 'var(--crimson)' : 'var(--gold-dark)', fontWeight:500 }}>
+                          {c._status === 'done' ? 'Done' : c._late ? 'Overdue' : c._status === 'started' ? 'In progress' : 'Pending'}
+                        </span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              </button>
-            ))}
-          </div>
+              </div>
+            )}
+
+            {/* ── Admin-scheduled (ad-hoc) tests ── */}
+            {tests.length > 0 && (
+              <div style={{ marginBottom:10 }}>
+                {monthlyCards.length > 0 && (
+                  <div style={{ fontSize:12, fontWeight:600, color:'var(--green-dark)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10 }}>Scheduled tests</div>
+                )}
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {tests.map(t => (
+                    <button key={t.id} onClick={() => setSelectedTest(t)} style={{ background:'var(--white)', border:'1px solid var(--gray-100)', borderRadius:'var(--radius-md)', padding:'14px 16px', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+                      <div>
+                        <div style={{ fontSize:14, fontWeight:600, color:'var(--text)', marginBottom:3 }}>{t.testName || 'Unnamed Test'}</div>
+                        <div style={{ fontSize:12, color:'var(--text-muted)' }}>{t.className} · {t.subject} · {t.testDate || 'No date'}</div>
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+                        {(() => {
+                          const done = testIdsWithMarks.has(t.id)
+                          return (
+                            <span style={{ fontSize:11, padding:'3px 9px', borderRadius:10, background: done ? 'var(--green-light)' : 'var(--gold-light)', color: done ? 'var(--green)' : 'var(--gold-dark)', fontWeight:500 }}>
+                              {done ? 'Done' : 'Pending'}
+                            </span>
+                          )
+                        })()}
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {monthlyCards.length === 0 && tests.length === 0 && (
+              <div style={{ textAlign:'center', padding:'40px 20px', background:'var(--white)', borderRadius:'var(--radius-lg)', border:'1px solid var(--gray-100)' }}>
+                <p style={{ color:'var(--text-muted)', fontSize:14 }}>No tests due for your classes right now.</p>
+                <p style={{ color:'var(--text-muted)', fontSize:13, marginTop:4 }}>Monthly tests appear here automatically; extra tests are created by the admin.</p>
+              </div>
+            )}
+          </>
         )
       ) : (
         <>
