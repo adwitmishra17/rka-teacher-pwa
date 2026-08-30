@@ -22,6 +22,7 @@ import EnterMarks from './pages/EnterMarks'
 import ExamMarksEntry from './pages/ExamMarksEntry'
 import ExamGradesEntry from './pages/ExamGradesEntry'
 import HpcEntry from './pages/HpcEntry'
+import ReportCardEntries from './pages/ReportCardEntries'
 import Layout from './components/Layout'
 import ImpersonationBanner, { setImpersonationState, clearImpersonationState } from './components/ImpersonationBanner'
 import InstallPrompt from './components/InstallPrompt.jsx'
@@ -157,6 +158,7 @@ export default function App() {
             <Route path="exam-marks" element={<ExamMarksEntry />} />
             <Route path="exam-grades" element={<ExamGradesEntry />} />
             <Route path="hpc-entry" element={<HpcEntry />} />
+            <Route path="card-entries" element={<ReportCardEntries />} />
             {/* Legacy redirect — installed PWA tiles that still point to old /enter-marks */}
             <Route path="enter-marks" element={<Navigate to="/test-marks" replace />} />
           </Route>

@@ -89,6 +89,10 @@ export const api = {
     apiFetch('/marks', { method: 'POST', body: JSON.stringify({ paperId, marks }) }),
 
   // --- Co-scholastic grades ---
+  getCardEntries: (termId) =>
+    apiFetch('/card-entries' + (termId ? `?termId=${encodeURIComponent(termId)}` : '')),
+  saveCardEntries: (termId, sessionCode, students) =>
+    apiFetch('/card-entries', { method: 'POST', body: JSON.stringify({ termId, sessionCode, students }) }),
   getGrades: (subjectId, termId) =>
     apiFetch(`/grades?subjectId=${encodeURIComponent(subjectId)}&termId=${encodeURIComponent(termId)}`),
 

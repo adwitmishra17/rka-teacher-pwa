@@ -9,6 +9,7 @@ import studentsRouter from './routes/students.js'
 import papersRouter from './routes/papers.js'
 import marksRouter from './routes/marks.js'
 import gradesRouter from './routes/grades.js'
+import cardEntriesRouter from './routes/cardentries.js'
 import hpcRouter from './routes/hpc.js'
 import syllabusRouter from './routes/syllabus.js'
 import hikRouter from './routes/hik.js'
@@ -68,6 +69,7 @@ app.use('/api', studentsRouter)
 app.use('/api', papersRouter)
 app.use('/api', marksRouter)
 app.use('/api', gradesRouter)
+app.use('/api', cardEntriesRouter)
 app.use('/api', hpcRouter)
 app.use('/api', syllabusRouter)
 
