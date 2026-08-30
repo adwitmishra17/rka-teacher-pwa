@@ -86,7 +86,9 @@ router.post('/paper', requireAuth, async (req, res) => {
     term_id: termId,
     paper_name: paperName,
     max_marks,
-    passing_marks: passingMarks != null ? Number(passingMarks) : null,
+    // passing_marks is NOT NULL in the schema — an explicit null bypasses the
+    // column default and violates the constraint. Blank → 33% of max.
+    passing_marks: passingMarks != null && passingMarks !== '' ? Number(passingMarks) : Math.ceil(max_marks * 0.33),
     exam_date: examDate || null,
     has_practical: practical,
     theory_max,
