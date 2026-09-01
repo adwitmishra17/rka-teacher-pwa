@@ -21,18 +21,19 @@ import { getAdminFirestore } from '../lib/firebase-admin.js'
 const router = Router()
 
 async function resolveClassTeacher(email) {
+  // classTeacherByEmail/<email> is THE source of class-teachership — the
+  // same doc the attendance pages and the Firestore rules read. (The
+  // teachers.classTeacherOf profile field can be stale/half-assigned; the
+  // Shiwangi Tiwari case proved the two can diverge.)
   const db = getAdminFirestore()
-  const snap = await db.collection('teachers').get()
-  const t = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-    .find(x => x.isActive !== false && (
-      (x.email || '').trim().toLowerCase() === email ||
-      (x.personalEmail || '').trim().toLowerCase() === email))
-  if (!t) return null
+  const snap = await db.doc(`classTeacherByEmail/${email}`).get()
+  if (!snap.exists) return null
+  const d = snap.data()
   return {
-    teacherId: t.id,
-    fullName: t.fullName || '',
-    classTeacherOf: (t.classTeacherOf || '').trim() || null,
-    branchCode: (t.branchCodes && t.branchCodes[0]) || 'MAIN',
+    teacherId: d.teacherDocId || null,
+    fullName: d.teacherName || '',
+    classTeacherOf: (d.className || '').trim() || null,
+    branchCode: d.branchCode || 'MAIN',
   }
 }
 
