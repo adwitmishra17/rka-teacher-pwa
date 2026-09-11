@@ -57,7 +57,7 @@ const MARKS_ITEMS = [
   {
     to: '/test-marks',
     label: 'Enter Test Marks',
-    subtitle: 'Admin-scheduled class tests',
+    subtitle: 'Monthly tests · not on the report card',
     iconBg: '#e8f4ea',
     iconColor: 'var(--green)',
     icon: (
@@ -70,7 +70,7 @@ const MARKS_ITEMS = [
   {
     to: '/exam-marks',
     label: 'Enter Exam Marks',
-    subtitle: 'Term exams · used for report cards',
+    subtitle: 'Subject teachers · PA, portfolio, term exam papers set by the office',
     iconBg: '#fdf3d0',
     iconColor: 'var(--gold-dark)',
     icon: (
@@ -82,7 +82,7 @@ const MARKS_ITEMS = [
   {
     to: '/exam-grades',
     label: 'Co-scholastic Grades',
-    subtitle: 'Term grades for activities & conduct',
+    subtitle: 'Teachers of co-scholastic subjects (Art, PE, Music…)',
     iconBg: '#f0f7f0',
     iconColor: 'var(--green)',
     icon: (
@@ -94,7 +94,7 @@ const MARKS_ITEMS = [
   {
     to: '/card-entries',
     label: 'Report Card Entries',
-    subtitle: 'Class teacher · discipline, remarks, co-scholastic',
+    subtitle: 'Class teacher only · card areas, discipline, remarks, height & weight',
     iconBg: '#eef2fb',
     iconColor: '#2a4a8b',
     icon: (
@@ -106,7 +106,7 @@ const MARKS_ITEMS = [
   {
     to: '/hpc-entry',
     label: 'HPC Assessment',
-    subtitle: 'Health & Physical Competency card',
+    subtitle: 'Holistic Progress Card · Nursery to Class 2',
     iconBg: '#f5f0f7',
     iconColor: '#7c3cb4',
     icon: (

@@ -113,6 +113,10 @@ export default function ReportCardEntries() {
           {identity?.classTeacherOf} · your class · {doneCount}/{rows.length} complete
         </p>
       </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'var(--green-light)', border: '1px solid var(--green-muted)', borderRadius: 'var(--radius-md)', padding: '9px 12px', fontSize: 12, color: 'var(--green-dark)', lineHeight: 1.5, marginBottom: 14 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: 2 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>Class-teacher pack for your own class: co-scholastic area grades, graded subjects, discipline, remarks, achievement, height & weight — everything on the card that is not a subject mark. Subject marks are entered by each subject teacher under <b>Enter Exam Marks</b>.</span>
+        </div>
 
       {/* Term picker */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
