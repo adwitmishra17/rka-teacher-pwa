@@ -56,10 +56,6 @@ export default function ExamMarksEntry() {
   const [selectedTerm, setSelectedTerm] = useState(null)
   const [selectedPaper, setSelectedPaper] = useState(null)
 
-  // Paper creation/edit form
-  const [showPaperForm, setShowPaperForm] = useState(false)
-  const [editingPaper, setEditingPaper] = useState(null)  // null = new
-  const [paperForm, setPaperForm] = useState({ paperName: '', maxMarks: '', passingMarks: '', examDate: '', hasPractical: false, theoryMax: '', practicalMax: '' })
 
   // UI
   const [loading, setLoading] = useState(true)
@@ -237,40 +233,6 @@ export default function ExamMarksEntry() {
     setProgressSaving(false)
   }
 
-  async function handleSavePaper() {
-    const hp = paperForm.hasPractical
-    if (!paperForm.paperName.trim() || (hp ? (paperForm.theoryMax === '' || paperForm.practicalMax === '') : !paperForm.maxMarks)) {
-      setError(hp ? 'Paper name, theory max and practical max are required' : 'Paper name and max marks are required')
-      return
-    }
-    setSaving(true)
-    setError('')
-    try {
-      const { paper } = await api.savePaper({
-        subjectId: selectedSubject.id,
-        termId: selectedTerm.id,
-        paperName: paperForm.paperName.trim(),
-        maxMarks: hp ? undefined : Number(paperForm.maxMarks),
-        passingMarks: paperForm.passingMarks ? Number(paperForm.passingMarks) : null,
-        examDate: paperForm.examDate || null,
-        paperId: editingPaper?.id,
-        hasPractical: hp,
-        theoryMax: hp ? Number(paperForm.theoryMax) : undefined,
-        practicalMax: hp ? Number(paperForm.practicalMax) : undefined,
-      })
-      setPapers(prev => {
-        const idx = prev.findIndex(p => p.id === paper.id)
-        return idx >= 0 ? prev.map((p, i) => (i === idx ? paper : p)) : [...prev, paper]
-      })
-      setSelectedPaper(paper)
-      setShowPaperForm(false)
-      setEditingPaper(null)
-      setPaperForm({ paperName: '', maxMarks: '', passingMarks: '', examDate: '', hasPractical: false, theoryMax: '', practicalMax: '' })
-    } catch (e) {
-      setError(e.message)
-    }
-    setSaving(false)
-  }
 
   async function handleSubmitMarks() {
     if (!selectedPaper || students.length === 0 || lock.locked) return
@@ -414,90 +376,6 @@ export default function ExamMarksEntry() {
         </div>
       )}
 
-      {/* ── Paper form modal ──────────────────────────────── */}
-      {showPaperForm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000, animation: 'fadeIn 0.2s ease' }}>
-          <div className="fade-up" style={{ background: 'var(--white)', borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0', width: '100%', maxWidth: 520, boxShadow: '0 -8px 40px rgba(0,0,0,0.2)' }}>
-            <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--gray-100)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 600, color: 'var(--green-dark)' }}>{editingPaper ? 'Edit paper' : 'New paper'}</h3>
-                <button onClick={() => { setShowPaperForm(false); setEditingPaper(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, padding: 4, lineHeight: 1 }}>×</button>
-              </div>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{selectedSubject?.subjectName} · {selectedTerm?.label ?? selectedTerm?.id}</p>
-            </div>
-            <div style={{ padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {(() => {
-                const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-sm)', fontSize: 14, boxSizing: 'border-box' }
-                const labelStyle = { fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }
-                const hp = paperForm.hasPractical
-                const total = hp ? (Number(paperForm.theoryMax || 0) + Number(paperForm.practicalMax || 0)) : null
-                const valid = paperForm.paperName.trim() && (hp ? (paperForm.theoryMax !== '' && paperForm.practicalMax !== '') : paperForm.maxMarks !== '')
-                return (
-                  <>
-                    <div>
-                      <label style={labelStyle}>Paper name *</label>
-                      <input type="text" value={paperForm.paperName} placeholder="e.g. Unit Test 1"
-                        onChange={e => setPaperForm(f => ({ ...f, paperName: e.target.value }))} style={inputStyle} />
-                    </div>
-
-                    {/* Practical toggle */}
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', padding: '10px 12px', background: hp ? 'var(--green-light)' : 'var(--gray-50, #f7f7f5)', border: `1px solid ${hp ? 'var(--green-muted)' : 'var(--gray-200)'}`, borderRadius: 'var(--radius-sm)' }}>
-                      <input type="checkbox" checked={hp}
-                        onChange={e => setPaperForm(f => ({ ...f, hasPractical: e.target.checked }))}
-                        style={{ width: 16, height: 16, accentColor: 'var(--green)' }} />
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>This subject has a practical</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Enter theory and practical marks separately</div>
-                      </div>
-                    </label>
-
-                    {hp ? (
-                      <div style={{ display: 'flex', gap: 10 }}>
-                        <div style={{ flex: 1 }}>
-                          <label style={labelStyle}>Theory max *</label>
-                          <input type="number" min="0" value={paperForm.theoryMax} placeholder="80"
-                            onChange={e => setPaperForm(f => ({ ...f, theoryMax: e.target.value }))} style={inputStyle} />
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <label style={labelStyle}>Practical max *</label>
-                          <input type="number" min="0" value={paperForm.practicalMax} placeholder="20"
-                            onChange={e => setPaperForm(f => ({ ...f, practicalMax: e.target.value }))} style={inputStyle} />
-                        </div>
-                        <div style={{ width: 64 }}>
-                          <label style={labelStyle}>Total</label>
-                          <div style={{ ...inputStyle, background: 'var(--gray-100)', textAlign: 'center', fontWeight: 700, color: 'var(--green-dark)' }}>{total || 0}</div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <label style={labelStyle}>Max marks *</label>
-                        <input type="number" min="0" value={paperForm.maxMarks} placeholder="100"
-                          onChange={e => setPaperForm(f => ({ ...f, maxMarks: e.target.value }))} style={inputStyle} />
-                      </div>
-                    )}
-
-                    <div>
-                      <label style={labelStyle}>Passing marks</label>
-                      <input type="number" min="0" value={paperForm.passingMarks} placeholder="33"
-                        onChange={e => setPaperForm(f => ({ ...f, passingMarks: e.target.value }))} style={inputStyle} />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Exam date</label>
-                      <input type="date" value={paperForm.examDate}
-                        onChange={e => setPaperForm(f => ({ ...f, examDate: e.target.value }))} style={inputStyle} />
-                    </div>
-
-                    <button onClick={handleSavePaper} disabled={saving || !valid}
-                      style={{ width: '100%', padding: '13px', background: !valid ? 'var(--gray-200)' : 'var(--green)', color: !valid ? 'var(--gray-400)' : 'white', border: 'none', borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 600, cursor: valid ? 'pointer' : 'not-allowed' }}>
-                      {saving ? 'Saving…' : editingPaper ? 'Update paper' : 'Create paper'}
-                    </button>
-                  </>
-                )
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Main content ──────────────────────────────────── */}
 
@@ -545,33 +423,32 @@ export default function ExamMarksEntry() {
         </>
       )}
 
-      {/* STEP 3: Pick or create paper */}
+      {/* STEP 3: Pick a paper (generated by the office from the report-card rules) */}
       {selectedSubject && selectedTerm && !selectedPaper && (
         <>
           <PageHeader title={selectedTerm.label ?? selectedTerm.id} subtitle={`${selectedSubject.subjectName} · ${selectedSubject.className}`} onBack={() => setSelectedTerm(null)} />
           <ErrorBanner message={error} onDismiss={() => setError('')} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-            {papers.map(p => (
-              <button key={p.id} onClick={() => setSelectedPaper(p)}
-                style={{ background: 'var(--white)', border: '1px solid var(--gray-100)', borderRadius: 'var(--radius-md)', padding: '14px 16px', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 3 }}>{p.paper_name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    Max {p.max_marks}{p.has_practical ? ` (T${p.theory_max ?? 0}+P${p.practical_max ?? 0})` : ''}{p.passing_marks ? ` · Pass ${p.passing_marks}` : ''}{p.exam_date ? ` · ${p.exam_date}` : ''}
+          {papers.length === 0 ? (
+            <div style={{ background: 'var(--gold-light)', border: '1px solid rgba(201,162,39,0.3)', borderRadius: 'var(--radius-lg)', padding: '24px 20px', textAlign: 'center' }}>
+              <p style={{ fontSize: 14, color: 'var(--gold-dark)', fontWeight: 500, marginBottom: 4 }}>No paper set up for this term yet</p>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>The office generates papers from the report-card rules. Ask them if you were expecting one here.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+              {[...papers].sort((a, b) => (b.component_key ? 1 : 0) - (a.component_key ? 1 : 0)).map(p => (
+                <button key={p.id} onClick={() => setSelectedPaper(p)}
+                  style={{ background: 'var(--white)', border: '1px solid var(--gray-100)', borderRadius: 'var(--radius-md)', padding: '14px 16px', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 3 }}>{p.paper_name}{!p.component_key && <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 500 }}> · legacy</span>}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      Max {p.max_marks}{p.has_practical ? ` (T${p.theory_max ?? 0}+P${p.practical_max ?? 0})` : ''}{p.card_max != null && Number(p.card_max) !== Number(p.max_marks) ? ` · counts /${p.card_max} on the card` : ''}{p.passing_marks ? ` · Pass ${p.passing_marks}` : ''}{p.exam_date ? ` · ${p.exam_date}` : ''}
+                    </div>
                   </div>
-                </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                  <button onClick={e => { e.stopPropagation(); setEditingPaper(p); setPaperForm({ paperName: p.paper_name, maxMarks: String(p.max_marks), passingMarks: p.passing_marks ? String(p.passing_marks) : '', examDate: p.exam_date ?? '', hasPractical: !!p.has_practical, theoryMax: p.theory_max != null ? String(p.theory_max) : '', practicalMax: p.practical_max != null ? String(p.practical_max) : '' }); setShowPaperForm(true) }}
-                    style={{ background: 'var(--gray-100)', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 500 }}>Edit</button>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
-                </div>
-              </button>
-            ))}
-          </div>
-          <button onClick={() => { setEditingPaper(null); setPaperForm({ paperName: '', maxMarks: '', passingMarks: '', examDate: '', hasPractical: false, theoryMax: '', practicalMax: '' }); setShowPaperForm(true) }}
-            style={{ width: '100%', padding: '13px', background: 'transparent', border: '1.5px dashed var(--green-muted)', borderRadius: 'var(--radius-md)', fontSize: 14, fontWeight: 600, color: 'var(--green)', cursor: 'pointer' }}>
-            + Add new paper
-          </button>
+                </button>
+              ))}
+            </div>
+          )}
         </>
       )}
 
