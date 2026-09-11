@@ -386,7 +386,7 @@ export default function ExamMarksEntry() {
           <ErrorBanner message={error} onDismiss={() => setError('')} />
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'var(--green-light)', border: '1px solid var(--green-muted)', borderRadius: 'var(--radius-md)', padding: '9px 12px', fontSize: 12, color: 'var(--green-dark)', lineHeight: 1.5, marginBottom: 14 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: 2 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-          <span>Pick a subject, then the term, then the paper. Papers (PA-1 /40, Portfolio /5, Term Exam /80 …) are set up by the office — enter the raw marks; the card scales them (a PA out of 40 counts /10). Co-scholastic grades and remarks are entered by the class teacher under <b>Report Card Entries</b>.</span>
+          <span>Pick a subject, then the term, then the paper. Papers (PA-1 /40, Portfolio /5, Term Exam /80 …) are set up by the office — enter the raw marks; the card scales them (a PA out of 40 counts /10). Co-scholastic grades and remarks are entered by the class teacher under <b>Co-scholastic Entries (Report card)</b>.</span>
         </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {subjects.map(s => (

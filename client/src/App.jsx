@@ -20,7 +20,6 @@ import StudentAttendance from './pages/StudentAttendance'
 import ErrorBoundary from './components/ErrorBoundary'
 import EnterMarks from './pages/EnterMarks'
 import ExamMarksEntry from './pages/ExamMarksEntry'
-import ExamGradesEntry from './pages/ExamGradesEntry'
 import HpcEntry from './pages/HpcEntry'
 import ReportCardEntries from './pages/ReportCardEntries'
 import Layout from './components/Layout'
@@ -156,7 +155,8 @@ export default function App() {
             <Route path="test-marks" element={<EnterMarks />} />
             {/* Supabase-backed term exam data entry */}
             <Route path="exam-marks" element={<ExamMarksEntry />} />
-            <Route path="exam-grades" element={<ExamGradesEntry />} />
+            {/* Retired: co-scholastic grading is the class teacher's card pack now */}
+            <Route path="exam-grades" element={<Navigate to="/card-entries" replace />} />
             <Route path="hpc-entry" element={<HpcEntry />} />
             <Route path="card-entries" element={<ReportCardEntries />} />
             {/* Legacy redirect — installed PWA tiles that still point to old /enter-marks */}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { api } from '../lib/api'
 
 /* ============================================================
-   Report Card Entries — the CLASS TEACHER's pack (Phase 2).
+   Co-scholastic Entries (Report card) — the CLASS TEACHER's pack.
 
    For the class teacher's own class, per term:
    · co-scholastic areas + graded subjects (grade chips; scales
@@ -108,7 +108,7 @@ export default function ReportCardEntries() {
   return (
     <div style={{ padding: 20 }}>
       <div className="fade-up" style={{ marginBottom: 16 }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, color: 'var(--green-dark)' }}>Report Card Entries</h1>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, color: 'var(--green-dark)' }}>Co-scholastic Entries <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)' }}>(Report card)</span></h1>
         <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
           {identity?.classTeacherOf} · your class · {doneCount}/{rows.length} complete
         </p>

@@ -80,20 +80,8 @@ const MARKS_ITEMS = [
     ),
   },
   {
-    to: '/exam-grades',
-    label: 'Co-scholastic Grades',
-    subtitle: 'Teachers of co-scholastic subjects (Art, PE, Music…)',
-    iconBg: '#f0f7f0',
-    iconColor: 'var(--green)',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>
-      </svg>
-    ),
-  },
-  {
     to: '/card-entries',
-    label: 'Report Card Entries',
+    label: 'Co-scholastic Entries (Report card)',
     subtitle: 'Class teacher only · card areas, discipline, remarks, height & weight',
     iconBg: '#eef2fb',
     iconColor: '#2a4a8b',
@@ -118,7 +106,7 @@ const MARKS_ITEMS = [
 ]
 
 // Routes where the Marks tab should light up as active
-const MARKS_ROUTES = ['/test-marks', '/exam-marks', '/exam-grades', '/card-entries', '/hpc-entry', '/my-marks']
+const MARKS_ROUTES = ['/test-marks', '/exam-marks', '/card-entries', '/hpc-entry', '/my-marks']
 
 // ─── component ────────────────────────────────────────────────────────────────
 
