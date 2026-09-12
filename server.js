@@ -6,10 +6,6 @@ import { dirname, join } from 'path'
 import { existsSync } from 'fs'
 import subjectsRouter from './routes/subjects.js'
 import studentsRouter from './routes/students.js'
-import papersRouter from './routes/papers.js'
-import marksRouter from './routes/marks.js'
-import gradesRouter from './routes/grades.js'
-import cardEntriesRouter from './routes/cardentries.js'
 import hpcRouter from './routes/hpc.js'
 import syllabusRouter from './routes/syllabus.js'
 import hikRouter from './routes/hik.js'
@@ -66,10 +62,12 @@ app.use('/api', requireAuth, requireStaff)
 
 app.use('/api', subjectsRouter)
 app.use('/api', studentsRouter)
-app.use('/api', papersRouter)
-app.use('/api', marksRouter)
-app.use('/api', gradesRouter)
-app.use('/api', cardEntriesRouter)
+// Retired 2026-09-13 — exam marks, papers, co-scholastic grades and the
+// class-teacher card pack are entered by the office in the Tracker
+// (Examinations → Marks entry). Stale clients get a clear 410.
+app.all(['/api/paper', '/api/paper/*', '/api/marks', '/api/marks/*', '/api/grades', '/api/grades/*', '/api/card-entries', '/api/card-entries/*', '/api/grade-subjects', '/api/grade-subjects/*'], (_req, res) => {
+  res.status(410).json({ error: 'Exam marks and report-card entries are now done by the office in the Tracker. Please refresh the app.' })
+})
 app.use('/api', hpcRouter)
 app.use('/api', syllabusRouter)
 
