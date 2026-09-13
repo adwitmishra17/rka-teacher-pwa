@@ -19,7 +19,6 @@ import MyStudents from './pages/MyStudents'
 import StudentAttendance from './pages/StudentAttendance'
 import ErrorBoundary from './components/ErrorBoundary'
 import EnterMarks from './pages/EnterMarks'
-import HpcEntry from './pages/HpcEntry'
 import Layout from './components/Layout'
 import ImpersonationBanner, { setImpersonationState, clearImpersonationState } from './components/ImpersonationBanner'
 import InstallPrompt from './components/InstallPrompt.jsx'
@@ -156,7 +155,7 @@ export default function App() {
             <Route path="exam-marks" element={<Navigate to="/" replace />} />
             {/* Retired: co-scholastic grading is the class teacher's card pack now */}
             <Route path="exam-grades" element={<Navigate to="/" replace />} />
-            <Route path="hpc-entry" element={<HpcEntry />} />
+            <Route path="hpc-entry" element={<Navigate to="/" replace />} />   {/* retired 2026-09-14: HPC is entered by the office in the Tracker */}
             <Route path="card-entries" element={<Navigate to="/" replace />} />
             {/* Legacy redirect — installed PWA tiles that still point to old /enter-marks */}
             <Route path="enter-marks" element={<Navigate to="/test-marks" replace />} />

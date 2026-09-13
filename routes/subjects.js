@@ -83,42 +83,6 @@ router.get('/terms', requireAuth, async (req, res) => {
   })
 })
 
-// GET /api/hpc-template?sessionCode=&branchCode=
-// Reads HPC domain config from Firestore `hpcTemplates` (written by Admin Tracker).
-// Resolution order: {branchCode}_{sessionCode} → {sessionCode} → default.
-// If nothing found, returns a standard Indian-school HPC template so the page always renders.
-router.get('/hpc-template', requireAuth, async (req, res) => {
-  const { sessionCode, branchCode } = req.query
-  const db = getAdminFirestore()
-
-  const DEFAULT_TEMPLATE = {
-    domains: [
-      { id: 'physical_health', label: 'Physical Health & Education', gradeOptions: ['A+', 'A', 'B', 'C', 'D'] },
-      { id: 'work_education',  label: 'Work Education',              gradeOptions: ['A+', 'A', 'B', 'C', 'D'] },
-      { id: 'art_education',   label: 'Art Education',               gradeOptions: ['A+', 'A', 'B', 'C', 'D'] },
-      { id: 'discipline',      label: 'Discipline',                  gradeOptions: ['A+', 'A', 'B', 'C', 'D'] },
-      { id: 'attitude_values', label: 'Attitude & Values',           gradeOptions: ['A+', 'A', 'B', 'C', 'D'] },
-    ],
-    generalRemarksEnabled: true,
-  }
-
-  try {
-    const tryDoc = async (id) => {
-      const snap = await db.collection('hpcTemplates').doc(id).get()
-      return snap.exists ? snap.data() : null
-    }
-
-    const template =
-      (branchCode && sessionCode && (await tryDoc(`${branchCode}_${sessionCode}`))) ||
-      (sessionCode && (await tryDoc(sessionCode))) ||
-      (await tryDoc('default')) ||
-      DEFAULT_TEMPLATE
-
-    res.json(template)
-  } catch (e) {
-    console.error('GET /api/hpc-template', e)
-    res.json(DEFAULT_TEMPLATE)  // degrade gracefully — page can still render
-  }
-})
+// (GET /api/hpc-template removed 2026-09-14 — HPC setup lives in the Tracker; server.js answers 410.)
 
 export default router

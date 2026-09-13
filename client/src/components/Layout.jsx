@@ -67,22 +67,10 @@ const MARKS_ITEMS = [
       </svg>
     ),
   },
-  {
-    to: '/hpc-entry',
-    label: 'HPC Assessment',
-    subtitle: 'Holistic Progress Card · Nursery to Class 2',
-    iconBg: '#f5f0f7',
-    iconColor: '#7c3cb4',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-      </svg>
-    ),
-  },
 ]
 
 // Routes where the Marks tab should light up as active
-const MARKS_ROUTES = ['/test-marks', '/hpc-entry', '/my-marks']
+const MARKS_ROUTES = ['/test-marks', '/my-marks']
 
 // ─── component ────────────────────────────────────────────────────────────────
 

@@ -6,7 +6,6 @@ import { dirname, join } from 'path'
 import { existsSync } from 'fs'
 import subjectsRouter from './routes/subjects.js'
 import studentsRouter from './routes/students.js'
-import hpcRouter from './routes/hpc.js'
 import syllabusRouter from './routes/syllabus.js'
 import hikRouter from './routes/hik.js'
 import { requireAuth, requireStaff } from './middleware/auth.js'
@@ -68,7 +67,11 @@ app.use('/api', studentsRouter)
 app.all(['/api/paper', '/api/paper/*', '/api/marks', '/api/marks/*', '/api/grades', '/api/grades/*', '/api/card-entries', '/api/card-entries/*', '/api/grade-subjects', '/api/grade-subjects/*'], (_req, res) => {
   res.status(410).json({ error: 'Exam marks and report-card entries are now done by the office in the Tracker. Please refresh the app.' })
 })
-app.use('/api', hpcRouter)
+// Retired 2026-09-14 — the Holistic Progress Card is set up and entered by the
+// office in the Tracker (HPC Cards). routes/hpc.js stays on disk, unmounted.
+app.all(['/api/hpc', '/api/hpc/*', '/api/hpc-template'], (_req, res) => {
+  res.status(410).json({ error: 'HPC assessments are now entered by the office in the Tracker. Please refresh the app.' })
+})
 app.use('/api', syllabusRouter)
 
 // Health check (Hostinger / load balancer ping). `build` doubles as a deploy
