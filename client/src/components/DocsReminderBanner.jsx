@@ -7,7 +7,6 @@
 // =========================================================================
 
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { auth } from '../firebase/config'
 
 const FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
@@ -57,7 +56,7 @@ export default function DocsReminderBanner() {
           {state.done} of {state.total} uploaded — add your marksheets, Aadhaar &amp; PAN.
         </div>
       </div>
-      <Link to="/hrms/documents" style={cta} onClick={dismiss}>Upload</Link>
+      <a href="/hrms/documents" style={cta} onClick={dismiss}>Upload</a>
       <button onClick={dismiss} aria-label="Dismiss" style={close}>×</button>
     </div>
   )
