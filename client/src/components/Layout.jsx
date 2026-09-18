@@ -5,6 +5,7 @@ import { auth } from '../firebase/config'
 import { useAuth } from '../App'
 import crest from '../assets/crest.png'
 import banner from '../assets/banner.png'
+import SkolixLockup from './SkolixLockup'
 
 // ─── bottom-nav items (non-marks) ─────────────────────────────────────────────
 
@@ -102,9 +103,12 @@ export default function Layout() {
 
       {/* ── Top bar ────────────────────────────────────────────────────────── */}
       <header style={{ background:'var(--green-dark)', padding:'14px 20px 12px', display:'flex', alignItems:'center', justifyContent:'space-between', position:'sticky', top:0, zIndex:50 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:9 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:9, minWidth:0 }}>
           <img src={crest} alt="RKA" style={{ width:32, height:32, borderRadius:'50%', border:'1px solid rgba(201,162,39,0.4)', objectFit:'contain', background:'rgba(201,162,39,0.1)', padding:2, flexShrink:0 }} />
-          <img src={banner} alt="Radhakrishna Academy" style={{ height:28, width:'auto', maxWidth:170, objectFit:'contain', mixBlendMode:'screen' }} />
+          <div style={{ display:'flex', flexDirection:'column', gap:3, minWidth:0 }}>
+            <img src={banner} alt="Radhakrishna Academy" style={{ height:24, width:'auto', maxWidth:160, objectFit:'contain', objectPosition:'left', mixBlendMode:'screen' }} />
+            <div style={{ color:'rgba(255,255,255,0.92)', paddingLeft:1 }}><SkolixLockup app="Teacher" color="#fff" ink="#fff" height={10} /></div>
+          </div>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <div style={{ textAlign:'right' }}>
