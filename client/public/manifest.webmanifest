@@ -1,7 +1,7 @@
 {
-  "name": "RKA Teacher PWA",
-  "short_name": "Teacher PWA",
-  "description": "Radhakrishna Academy — attendance, marks, lesson logs and homework for teachers.",
+  "name": "Skolix Teacher",
+  "short_name": "Skolix Teacher",
+  "description": "Skolix Teacher for Radhakrishna Academy \u2014 attendance, marks, lesson logs and homework.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -9,7 +9,16 @@
   "background_color": "#faf9f5",
   "theme_color": "#1a4a2e",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "/skolix-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/skolix-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
   ]
 }
