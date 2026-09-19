@@ -8,7 +8,7 @@ import subjectsRouter from './routes/subjects.js'
 import studentsRouter from './routes/students.js'
 import syllabusRouter from './routes/syllabus.js'
 import hikRouter from './routes/hik.js'
-import { requireAuth, requireStaff } from './middleware/auth.js'
+import { requireAuth, requireStaff, requireTeacherEmail } from './middleware/auth.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PORT = process.env.PORT || 3001
@@ -57,7 +57,7 @@ app.use('/api', (_req, res, next) => {
 // alone. Individual routes keep their own ownership checks (assertPaperOwner
 // etc.); this is the outer membership boundary. The per-route requireAuth still
 // runs and is harmless (token verification is local + cached).
-app.use('/api', requireAuth, requireStaff)
+app.use('/api', requireAuth, requireStaff, requireTeacherEmail)
 
 app.use('/api', subjectsRouter)
 app.use('/api', studentsRouter)

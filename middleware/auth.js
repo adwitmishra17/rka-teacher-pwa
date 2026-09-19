@@ -66,6 +66,19 @@ export async function requireStaff(req, res, next) {
   }
 }
 
+// Teacher-data routes scope by req.user.email. A staff member with NO teacher
+// identity (e.g. an admin-only phone login) passes requireStaff but must never
+// fall through to an email-scoped query as `email == ''` — which would match
+// email-less / `assigned_teacher_email == ''` rows (cross-account read). Fail
+// closed. Real teachers always have an email here (Google, or resolved from the
+// otp_phone claim in requireAuth).
+export function requireTeacherEmail(req, res, next) {
+  if (!req.user?.email) {
+    return res.status(403).json({ error: 'No teacher identity for this account' })
+  }
+  next()
+}
+
 export async function requireAuth(req, res, next) {
   const header = req.headers.authorization || ''
   if (!header.startsWith('Bearer ')) {
