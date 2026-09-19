@@ -67,48 +67,59 @@ export default function App() {
           const cleanEmail = (s) =>
             (s || '').replace(/[​-‏‪-‮﻿ ]/g, '').trim().toLowerCase()
           const emailLower = cleanEmail(u.email)
+          const only10 = (s) => String(s || '').replace(/\D/g, '').slice(-10)
+          const phone10 = only10(u.phoneNumber)
 
-          let snap = await getDocs(query(collection(db, 'teachers'), where('email', '==', emailLower)))
-          if (snap.empty && u.email !== emailLower) {
-            snap = await getDocs(query(collection(db, 'teachers'), where('email', '==', u.email)))
+          // Resolve WHICH teacher this login is. Google logins carry an email and
+          // match on email / personalEmail; OTP logins carry only a phone and
+          // match on the last 10 digits (docs store mixed +91… / bare formats).
+          //
+          // ★ Never query an EMPTY email. An OTP login has no email, so the old
+          // `where('email','==', emailLower)` ran as `email == ''`, which matches
+          // every email-less teacher record and silently signed the OTP user into
+          // an arbitrary OTHER teacher (snap.docs[0]) — cross-account access.
+          let matched = null
+
+          if (emailLower) {
+            for (const field of ['email', 'personalEmail']) {
+              const snap = await getDocs(query(collection(db, 'teachers'), where(field, '==', emailLower)))
+              if (!snap.empty) { matched = snap.docs[0]; break }
+            }
           }
-          if (snap.empty) {
-            snap = await getDocs(query(collection(db, 'teachers'), where('personalEmail', '==', emailLower)))
-          }
-          if (snap.empty && u.email !== emailLower) {
-            snap = await getDocs(query(collection(db, 'teachers'), where('personalEmail', '==', u.email)))
-          }
-          if (snap.empty) {
+
+          if (!matched && phone10) {
             const allSnap = await getDocs(collection(db, 'teachers'))
-            const matched = allSnap.docs.find(d => {
+            matched = allSnap.docs.find(d => {
               const data = d.data()
-              return cleanEmail(data.email) === emailLower ||
-                cleanEmail(data.personalEmail) === emailLower
-            })
-            if (matched) {
-              setTeacher({ id: matched.id, ...matched.data() })
-              return
-            }
+              return only10(data.phone) === phone10 || only10(data.personalPhone) === phone10
+            }) || null
           }
-          if (!snap.empty) {
-            const t = { id: snap.docs[0].id, ...snap.docs[0].data() }
-            // HRMS-synced inactive flag — deactivated staff cannot sign in.
-            if (t.isActive === false) {
-              alert('Your account has been deactivated. Contact the school office.')
-              await auth.signOut()
-              setUser(null)
-              setTeacher(null)
-              return
-            }
-            setTeacher(t)
-          } else {
+
+          // Fail closed: an authenticated user with no matching teacher record is
+          // signed out, never dropped into an arbitrary teacher.
+          if (!matched) {
             await auth.signOut()
             setUser(null)
             setTeacher(null)
+            return
           }
+
+          const t = { id: matched.id, ...matched.data() }
+          // HRMS-synced inactive flag — deactivated staff cannot sign in.
+          if (t.isActive === false) {
+            alert('Your account has been deactivated. Contact the school office.')
+            await auth.signOut()
+            setUser(null)
+            setTeacher(null)
+            return
+          }
+          setTeacher(t)
         } catch (e) {
           console.error('Teacher lookup error:', e)
-          setTeacher({ email: u.email, fullName: u.displayName, id: null })
+          // Fail closed on error too — do not fall back to a partial identity.
+          await auth.signOut()
+          setUser(null)
+          setTeacher(null)
         }
       } else {
         setUser(null)
