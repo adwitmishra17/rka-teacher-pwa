@@ -68,7 +68,10 @@ export default function App() {
             (s || '').replace(/[​-‏‪-‮﻿ ]/g, '').trim().toLowerCase()
           const emailLower = cleanEmail(u.email)
           const only10 = (s) => String(s || '').replace(/\D/g, '').slice(-10)
-          const phone10 = only10(u.phoneNumber)
+          // OTP logins arrive as a custom-token session: u.phoneNumber is empty,
+          // but verify-otp stamps the verified phone as an `otp_phone` claim.
+          const claims = await u.getIdTokenResult().then((r) => r.claims).catch(() => ({}))
+          const phone10 = only10(claims.otp_phone || u.phoneNumber)
 
           // Resolve WHICH teacher this login is. Google logins carry an email and
           // match on email / personalEmail; OTP logins carry only a phone and

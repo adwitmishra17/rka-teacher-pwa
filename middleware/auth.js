@@ -10,6 +10,33 @@ import { getAdminAuth, getAdminFirestore } from '../lib/firebase-admin.js'
 const staffCache = new Map()
 const STAFF_TTL_MS = 5 * 60 * 1000
 
+// A phone-only identity (e.g. a phone-login admin who is ALSO a teacher) arrives
+// with an `otp_phone` claim and no email. Map that verified phone to the teacher's
+// email so requireStaff + every email-keyed route resolve them exactly as a Google
+// login would. Teacher docs store phone as bare-10 or +91…, so try both forms.
+// Cached per phone (same TTL as the staff check).
+const only10 = (s) => String(s || '').replace(/\D/g, '').slice(-10)
+const phoneEmailCache = new Map()
+
+async function emailForOtpPhone(phone) {
+  const p10 = only10(phone)
+  if (!p10) return null
+  const hit = phoneEmailCache.get(p10)
+  if (hit && hit.exp > Date.now()) return hit.email
+  const db = getAdminFirestore()
+  let email = null
+  for (const form of [p10, '+91' + p10, '91' + p10]) {
+    const snap = await db.collection('teachers').where('phone', '==', form).limit(1).get()
+    if (!snap.empty) {
+      const t = snap.docs[0].data()
+      email = (t.email || t.personalEmail || '').trim().toLowerCase() || null
+      if (email) break
+    }
+  }
+  phoneEmailCache.set(p10, { email, exp: Date.now() + STAFF_TTL_MS })
+  return email
+}
+
 export async function requireStaff(req, res, next) {
   const user = req.user
   if (!user) return res.status(401).json({ error: 'Not authenticated' })
@@ -46,6 +73,12 @@ export async function requireAuth(req, res, next) {
   }
   try {
     const decoded = await getAdminAuth().verifyIdToken(header.slice(7))
+    // OTP / phone-only identities carry no email but an `otp_phone` claim.
+    // Resolve it to the teacher's email so requireStaff + routes work unchanged.
+    if (!decoded.email && decoded.otp_phone) {
+      const em = await emailForOtpPhone(decoded.otp_phone)
+      if (em) decoded.email = em
+    }
     req.user = decoded   // { uid, email, name, ... }
     next()
   } catch (e) {
