@@ -99,7 +99,7 @@ export default function Login() {
       const res = await fetch(`${FUNCTIONS_URL}/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: toBackendPhone(phone), code: otp }),
+        body: JSON.stringify({ phone: toBackendPhone(phone), code: otp, source: 'teacher-app' }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.ok) {
